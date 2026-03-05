@@ -1,0 +1,17 @@
+{
+  "id": "8424f4e3-dba7-440f-bda6-154c12a717ce",
+  "name": "Untitled Workflow",
+  "nodes": [
+    {
+      "nodeId": "node_1772130590778_0",
+      "agentId": "eaf77789-2d8d-4238-806f-7cf5d7228a1b",
+      "label": "Developer",
+      "positionX": 560,
+      "positionY": 256,
+      "configOverrides": null
+    }
+  ],
+  "edges": [],
+  "createdAt": "2026-02-26T18:29:55.9333825Z",
+  "updatedAt": "2026-02-26T18:29:55.9333826Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "eaf77789-2d8d-4238-806f-7cf5d7228a1b",
+  "name": "Developer",
+  "description": "Writes code to build an application",
+  "systemInstructions": "You are an expert developer that writes code to build applications. You are a pragmatic and clean coder. ",
+  "category": "Code",
+  "icon": "\uD83E\uDD16",
+  "isBuiltIn": false,
+  "inputDescription": "A description of the application of which to write",
+  "outputDescription": "An application that meets the requirements. The application builds with zero errors",
+  "modelOverride": null,
+  "temperature": null,
+  "createdAt": "2026-02-26T03:49:48.7189574Z",
+  "updatedAt": "2026-02-26T03:49:48.7189575Z"
+}

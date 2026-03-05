@@ -1,0 +1,31 @@
+{
+  "id": "4dc15c1b-b0cc-45d8-bbe7-5b34c32b2ec0",
+  "name": "Untitled Workflow",
+  "nodes": [
+    {
+      "nodeId": "node_1772154443777_0",
+      "agentId": "eaf77789-2d8d-4238-806f-7cf5d7228a1b",
+      "label": "Developer",
+      "positionX": -112,
+      "positionY": 240,
+      "configOverrides": null
+    },
+    {
+      "nodeId": "node_1772154451117_1",
+      "agentId": "builtin-code-reviewer",
+      "label": "Code Reviewer",
+      "positionX": 288,
+      "positionY": 240,
+      "configOverrides": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "xy-edge__node_1772154443777_0-node_1772154451117_1",
+      "sourceNodeId": "node_1772154443777_0",
+      "targetNodeId": "node_1772154451117_1"
+    }
+  ],
+  "createdAt": "2026-02-27T01:07:40.1172792Z",
+  "updatedAt": "2026-02-27T01:07:40.1172794Z"
+}

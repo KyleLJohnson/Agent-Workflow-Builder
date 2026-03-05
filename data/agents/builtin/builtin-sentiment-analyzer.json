@@ -1,0 +1,15 @@
+{
+  "id": "builtin-sentiment-analyzer",
+  "name": "Sentiment Analyzer",
+  "description": "Analyzes text sentiment and returns classification with confidence.",
+  "systemInstructions": "You are a sentiment analysis expert. Analyze the given text and determine its\r\noverall sentiment. Return your analysis in the following format:\r\nSentiment: [Positive/Negative/Neutral/Mixed]\r\nConfidence: [High/Medium/Low]\r\nKey Indicators: [list the words or phrases that indicate the sentiment]\r\nBrief Explanation: [one sentence explaining your classification]",
+  "category": "Analysis",
+  "icon": "\uD83D\uDCCA",
+  "isBuiltIn": true,
+  "inputDescription": "Any text to analyze for sentiment (reviews, feedback, messages)",
+  "outputDescription": "Sentiment classification with confidence and explanation",
+  "modelOverride": null,
+  "temperature": null,
+  "createdAt": "2026-02-26T02:37:33.8039164Z",
+  "updatedAt": "2026-02-26T02:37:33.8039166Z"
+}

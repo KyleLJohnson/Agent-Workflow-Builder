@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AgentWorkflowBuilder.Agents/AgentWorkflowBuilder.Agents.csproj" />
+    <Project Path="src/AgentWorkflowBuilder.Api/AgentWorkflowBuilder.Api.csproj" />
+    <Project Path="src/AgentWorkflowBuilder.Core/AgentWorkflowBuilder.Core.csproj" />
+    <Project Path="src/AgentWorkflowBuilder.Persistence/AgentWorkflowBuilder.Persistence.csproj" />
+  </Folder>
+</Solution>

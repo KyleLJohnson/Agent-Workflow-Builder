@@ -1,0 +1,31 @@
+{
+  "id": "c06a5cdb-3811-4698-b841-4ff8427377e2",
+  "name": "Developer Workflow",
+  "nodes": [
+    {
+      "nodeId": "node_1772572256729_0",
+      "agentId": "eaf77789-2d8d-4238-806f-7cf5d7228a1b",
+      "label": "Developer",
+      "positionX": -64,
+      "positionY": 176,
+      "configOverrides": null
+    },
+    {
+      "nodeId": "node_1772572260478_1",
+      "agentId": "builtin-code-reviewer",
+      "label": "Code Reviewer",
+      "positionX": 272,
+      "positionY": 176,
+      "configOverrides": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "xy-edge__node_1772572256729_0-node_1772572260478_1",
+      "sourceNodeId": "node_1772572256729_0",
+      "targetNodeId": "node_1772572260478_1"
+    }
+  ],
+  "createdAt": "2026-03-03T21:11:28.2304382Z",
+  "updatedAt": "2026-03-03T21:11:28.2304385Z"
+}

@@ -1,0 +1,29 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.nupkg
+
+# IDE
+.vs/
+.vscode/
+*.swp
+
+# Node / Client
+client/node_modules/
+client/dist/
+e2e/node_modules/
+e2e/test-results/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Secrets
+appsettings.*.local.json
+*.pfx

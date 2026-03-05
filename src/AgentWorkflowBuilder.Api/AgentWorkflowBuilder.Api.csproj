@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentWorkflowBuilder.Core\AgentWorkflowBuilder.Core.csproj" />
+    <ProjectReference Include="..\AgentWorkflowBuilder.Persistence\AgentWorkflowBuilder.Persistence.csproj" />
+    <ProjectReference Include="..\AgentWorkflowBuilder.Agents\AgentWorkflowBuilder.Agents.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
