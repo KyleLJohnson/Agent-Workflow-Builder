@@ -30,6 +30,9 @@ public record WorkflowDefinition
 
     [JsonPropertyName("blobContainerName")]
     public string? BlobContainerName { get; init; }
+
+    [JsonPropertyName("autoApproveGates")]
+    public bool AutoApproveGates { get; init; }
 }
 
 /// <summary>

@@ -201,7 +201,7 @@ public class ExecutionRecordTests
     [Fact]
     public void WhenExecutionEventTypeEnumThenAllValuesExist()
     {
-        Assert.Equal(12, Enum.GetValues<ExecutionEventType>().Length);
+        Assert.Equal(13, Enum.GetValues<ExecutionEventType>().Length);
     }
 
     [Fact]

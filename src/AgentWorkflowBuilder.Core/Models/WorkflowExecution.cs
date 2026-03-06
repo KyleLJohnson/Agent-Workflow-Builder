@@ -86,7 +86,8 @@ public enum ExecutionEventType
     LoopIterationStarted,
     LoopIterationCompleted,
     PlanGenerated,
-    PlanTriggered
+    PlanTriggered,
+    GateAutoApproved
 }
 
 /// <summary>

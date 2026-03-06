@@ -8,8 +8,8 @@ import type {
   McpServerConfig,
   CreateMcpServerRequest,
   McpToolInfo,
-} from "./types";
-import { tokenRequest, isAuthConfigured } from "./authConfig";
+} from "@/types";
+import { tokenRequest, isAuthConfigured } from "@/authConfig";
 
 let msalInstance: IPublicClientApplication | null = null;
 

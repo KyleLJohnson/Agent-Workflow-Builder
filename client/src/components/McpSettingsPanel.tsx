@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, Save, Server, ToggleLeft, ToggleRight } from "lucide-react";
-import type { McpServerConfig, CreateMcpServerRequest } from "../types";
-import * as api from "../api";
+import type { McpServerConfig, CreateMcpServerRequest } from "@/types";
+import * as api from "@/api";
 
 interface McpSettingsPanelProps {
   onClose: () => void;

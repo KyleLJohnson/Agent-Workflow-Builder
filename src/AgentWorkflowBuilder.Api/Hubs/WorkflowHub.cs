@@ -43,7 +43,7 @@ public class WorkflowHub : Hub
     /// Returns the executionId for tracking.
     /// </summary>
     [HubMethodName("ExecuteWorkflow")]
-    public async Task<string> ExecuteWorkflowAsync(string workflowId, string inputMessage)
+    public async Task<string> ExecuteWorkflowAsync(string workflowId, string inputMessage, bool? autoApproveGates = null)
     {
         string userId = GetUserId();
         int currentCount = UserExecutionCounts.GetOrAdd(userId, 0);
@@ -78,8 +78,9 @@ public class WorkflowHub : Hub
             {
                 await Clients.Caller.SendAsync("ExecutionStarted", workflowId, ct);
 
+                bool resolvedAutoApprove = autoApproveGates ?? workflow.AutoApproveGates;
                 bool hasOutput = false;
-                await foreach (WorkflowExecutionEvent evt in _engine.ExecuteStreamingAsync(workflow, inputMessage, ct))
+                await foreach (WorkflowExecutionEvent evt in _engine.ExecuteStreamingAsync(workflow, inputMessage, resolvedAutoApprove, ct))
                 {
                     switch (evt.EventType)
                     {
@@ -122,6 +123,9 @@ public class WorkflowHub : Hub
                             break;
                         case ExecutionEventType.PlanTriggered:
                             await Clients.Caller.SendAsync("PlanTriggered", evt, ct);
+                            break;
+                        case ExecutionEventType.GateAutoApproved:
+                            await Clients.Caller.SendAsync("GateAutoApproved", evt, ct);
                             break;
                     }
                 }

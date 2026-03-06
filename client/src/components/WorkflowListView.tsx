@@ -1,5 +1,5 @@
 import { Calendar, Layers, Plus, ArrowRight } from "lucide-react";
-import type { WorkflowDefinition } from "../types";
+import type { WorkflowDefinition } from "@/types";
 
 interface WorkflowListViewProps {
   workflows: WorkflowDefinition[];

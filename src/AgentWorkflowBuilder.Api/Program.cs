@@ -290,7 +290,7 @@ app.MapPost("/api/workflows/{id}/execute", async (
 
     try
     {
-        WorkflowExecutionEvent result = await engine.ExecuteAsync(workflow, request.Content, ct);
+        WorkflowExecutionEvent result = await engine.ExecuteAsync(workflow, request.Content, ct: ct);
         return Results.Ok(result);
     }
     catch (InvalidOperationException ex)

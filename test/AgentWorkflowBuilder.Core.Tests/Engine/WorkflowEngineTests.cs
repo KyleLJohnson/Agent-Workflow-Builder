@@ -179,7 +179,7 @@ public class WorkflowEngineTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await engine.ExecuteAsync(workflow, "hello", cts.Token));
+            await engine.ExecuteAsync(workflow, "hello", ct: cts.Token));
     }
 
     [Fact]
@@ -244,7 +244,7 @@ public class WorkflowEngineTests
 
         try
         {
-            await foreach (WorkflowExecutionEvent evt in engine.ExecuteStreamingAsync(workflow, "input", cts.Token))
+            await foreach (WorkflowExecutionEvent evt in engine.ExecuteStreamingAsync(workflow, "input", ct: cts.Token))
             {
                 events.Add(evt);
             }
@@ -259,5 +259,43 @@ public class WorkflowEngineTests
         }
 
         Assert.Contains(events, e => e.EventType == ExecutionEventType.GateAwaitingApproval);
+    }
+
+    [Fact]
+    public async Task WhenAutoApproveGatesThenSkipsWaitingAndEmitsAutoApprovedEvent()
+    {
+        WorkflowEngine engine = CreateEngine();
+
+        WorkflowDefinition workflow = new()
+        {
+            Nodes =
+            [
+                new WorkflowNode
+                {
+                    NodeId = "gate-1",
+                    NodeType = "gate",
+                    GateConfig = new GateConfiguration
+                    {
+                        GateType = GateType.Approval,
+                        Instructions = "Please approve"
+                    }
+                }
+            ],
+            Edges = []
+        };
+
+        List<WorkflowExecutionEvent> events = [];
+        await foreach (WorkflowExecutionEvent evt in engine.ExecuteStreamingAsync(workflow, "test input", autoApproveGates: true))
+        {
+            events.Add(evt);
+        }
+
+        Assert.Contains(events, e => e.EventType == ExecutionEventType.GateAutoApproved);
+        Assert.DoesNotContain(events, e => e.EventType == ExecutionEventType.GateAwaitingApproval);
+
+        WorkflowExecutionEvent autoApprovedEvent = events.First(e => e.EventType == ExecutionEventType.GateAutoApproved);
+        Assert.Equal("gate-1", autoApprovedEvent.NodeId);
+        Assert.Equal("test input", autoApprovedEvent.Data);
+        Assert.Equal("Approval", autoApprovedEvent.GateType);
     }
 }

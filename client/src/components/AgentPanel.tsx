@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Search, Plus } from "lucide-react";
-import type { AgentDefinition } from "../types";
+import type { AgentDefinition } from "@/types";
 
 interface AgentPanelProps {
   agents: AgentDefinition[];

@@ -50,6 +50,7 @@ export interface WorkflowDefinition {
   edges: WorkflowEdge[];
   userId?: string;
   blobContainerName?: string | null;
+  autoApproveGates?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,7 +79,8 @@ export interface ExecutionEvent {
     | "LoopIterationStarted"
     | "LoopIterationCompleted"
     | "PlanGenerated"
-    | "PlanTriggered";
+    | "PlanTriggered"
+    | "GateAutoApproved";
   workflowId?: string;
   executionId?: string;
   nodeId?: string;
@@ -125,6 +127,7 @@ export interface CreateWorkflowRequest {
   description: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  autoApproveGates?: boolean;
 }
 
 // ─── MCP ──────────────────────────────────────────────────

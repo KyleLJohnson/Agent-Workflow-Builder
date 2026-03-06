@@ -43,13 +43,14 @@ public class WorkflowEngine : IWorkflowEngine
     public async Task<WorkflowExecutionEvent> ExecuteAsync(
         WorkflowDefinition workflow,
         string inputMessage,
+        bool autoApproveGates = false,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentException.ThrowIfNullOrWhiteSpace(inputMessage);
 
         string lastOutput = string.Empty;
-        await foreach (WorkflowExecutionEvent evt in ExecuteStreamingAsync(workflow, inputMessage, ct))
+        await foreach (WorkflowExecutionEvent evt in ExecuteStreamingAsync(workflow, inputMessage, autoApproveGates, ct))
         {
             if (evt.EventType == ExecutionEventType.WorkflowOutput && !string.IsNullOrWhiteSpace(evt.Data))
             {
@@ -72,6 +73,7 @@ public class WorkflowEngine : IWorkflowEngine
     public async IAsyncEnumerable<WorkflowExecutionEvent> ExecuteStreamingAsync(
         WorkflowDefinition workflow,
         string inputMessage,
+        bool autoApproveGates = false,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflow);
@@ -113,7 +115,7 @@ public class WorkflowEngine : IWorkflowEngine
                     if (singleStep.Node.NodeType == "gate")
                     {
                         await foreach (WorkflowExecutionEvent gateEvt in HandleGateNodeAsync(
-                            singleStep.Node, currentInput, executionId, ct))
+                            singleStep.Node, currentInput, executionId, autoApproveGates, ct))
                         {
                             yield return gateEvt;
 
@@ -123,6 +125,12 @@ public class WorkflowEngine : IWorkflowEngine
                             }
 
                             if (gateEvt.EventType == ExecutionEventType.GateApproved &&
+                                !string.IsNullOrWhiteSpace(gateEvt.Data))
+                            {
+                                currentInput = gateEvt.Data;
+                            }
+
+                            if (gateEvt.EventType == ExecutionEventType.GateAutoApproved &&
                                 !string.IsNullOrWhiteSpace(gateEvt.Data))
                             {
                                 currentInput = gateEvt.Data;
@@ -147,7 +155,7 @@ public class WorkflowEngine : IWorkflowEngine
                 else if (step is LoopGroupStep loopStep)
                 {
                     await foreach (WorkflowExecutionEvent loopEvt in RunLoopAsync(
-                        loopStep, currentInput, executionId, plan, ct))
+                        loopStep, currentInput, executionId, plan, autoApproveGates, ct))
                     {
                         yield return loopEvt;
 
@@ -431,9 +439,26 @@ public class WorkflowEngine : IWorkflowEngine
         WorkflowNode gateNode,
         string previousOutput,
         string executionId,
+        bool autoApproveGates,
         [EnumeratorCancellation] CancellationToken ct)
     {
         string gateType = gateNode.GateConfig?.GateType.ToString() ?? "Approval";
+
+        if (autoApproveGates)
+        {
+            _logger.LogInformation("Auto-approving gate {NodeId} in execution {ExecutionId}", gateNode.NodeId, executionId);
+            yield return new WorkflowExecutionEvent
+            {
+                EventType = ExecutionEventType.GateAutoApproved,
+                ExecutionId = executionId,
+                NodeId = gateNode.NodeId,
+                PreviousAgentOutput = previousOutput,
+                GateType = gateType,
+                GateInstructions = gateNode.GateConfig?.Instructions,
+                Data = previousOutput
+            };
+            yield break;
+        }
 
         yield return new WorkflowExecutionEvent
         {
@@ -514,6 +539,7 @@ public class WorkflowEngine : IWorkflowEngine
         string entryInput,
         string executionId,
         ExecutionPlan plan,
+        bool autoApproveGates,
         [EnumeratorCancellation] CancellationToken ct)
     {
         int maxIterations = loopStep.MaxIterations ?? _maxLoopIterations;
@@ -542,7 +568,7 @@ public class WorkflowEngine : IWorkflowEngine
                 {
                     bool aborted = false;
                     await foreach (WorkflowExecutionEvent gateEvt in HandleGateNodeAsync(
-                        node, iterationOutput, executionId, ct))
+                        node, iterationOutput, executionId, autoApproveGates, ct))
                     {
                         yield return gateEvt;
 
@@ -553,6 +579,12 @@ public class WorkflowEngine : IWorkflowEngine
                         }
 
                         if (gateEvt.EventType == ExecutionEventType.GateApproved &&
+                            !string.IsNullOrWhiteSpace(gateEvt.Data))
+                        {
+                            iterationOutput = gateEvt.Data;
+                        }
+
+                        if (gateEvt.EventType == ExecutionEventType.GateAutoApproved &&
                             !string.IsNullOrWhiteSpace(gateEvt.Data))
                         {
                             iterationOutput = gateEvt.Data;

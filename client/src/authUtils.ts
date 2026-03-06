@@ -1,5 +1,5 @@
 import type { IPublicClientApplication } from "@azure/msal-browser";
-import { tokenRequest, isAuthConfigured } from "./authConfig";
+import { tokenRequest, isAuthConfigured } from "@/authConfig";
 
 let msalInstance: IPublicClientApplication | null = null;
 

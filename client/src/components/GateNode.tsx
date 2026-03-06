@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ShieldCheck } from "lucide-react";
 
@@ -9,7 +10,7 @@ interface GateNodeData {
   [key: string]: unknown;
 }
 
-export default function GateNode({ data, selected }: NodeProps) {
+export default memo(function GateNode({ data, selected }: NodeProps) {
   const nodeData = data as GateNodeData;
   const gateType = nodeData.gateType || "Approval";
   const isReviewEdit = gateType === "ReviewAndEdit";
@@ -57,4 +58,4 @@ export default function GateNode({ data, selected }: NodeProps) {
       />
     </div>
   );
-}
+});

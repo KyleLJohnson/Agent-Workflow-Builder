@@ -1,38 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import type { HubConnection } from "@microsoft/signalr";
 import { HubConnectionState } from "@microsoft/signalr";
-import type { ExecutionEvent, ExecutionState } from "../types";
-
-/** Strip trailing GUID suffix and replace underscores with spaces for display. */
-function cleanAgentName(raw: string | undefined | null): string | undefined {
-  if (!raw) return undefined;
-  const stripped = raw.replace(/_[0-9a-f]{32}$/i, "");
-  return stripped.replace(/_/g, " ");
-}
-
-function mapStructuredEvent(
-  type: ExecutionEvent["type"],
-  payload: Record<string, unknown>
-): ExecutionEvent {
-  return {
-    type,
-    executionId: (payload.executionId as string) || undefined,
-    nodeId: (payload.nodeId as string) || undefined,
-    agentName: cleanAgentName(
-      (payload.executorName as string) || (payload.agentName as string)
-    ),
-    message: (payload.data as string) || undefined,
-    output: (payload.data as string) || undefined,
-    question: (payload.question as string) || undefined,
-    previousAgentOutput: (payload.previousAgentOutput as string) || undefined,
-    gateType: (payload.gateType as string) || undefined,
-    gateInstructions: (payload.gateInstructions as string) || undefined,
-    planSteps: (payload.planSteps as ExecutionEvent["planSteps"]) || undefined,
-    loopIteration: (payload.loopIteration as number) || undefined,
-    maxIterations: (payload.maxIterations as number) || undefined,
-    timestamp: (payload.timestamp as string) ?? new Date().toISOString(),
-  };
-}
+import type { ExecutionEvent, ExecutionState } from "@/types";
+import { mapStructuredEvent } from "@/utils/eventHelpers";
 
 /**
  * Manages multiple concurrent workflow executions, each with its own events array.
@@ -66,7 +36,7 @@ export function useExecutions(connectionRef: React.RefObject<HubConnection | nul
           status = "failed";
         } else if (
           status === "paused" &&
-          (event.type === "AgentStepStarted" || event.type === "GateApproved")
+          (event.type === "AgentStepStarted" || event.type === "GateApproved" || event.type === "GateAutoApproved")
         ) {
           status = "running";
         }
@@ -127,6 +97,7 @@ export function useExecutions(connectionRef: React.RefObject<HubConnection | nul
         "LoopIterationCompleted",
         "PlanGenerated",
         "PlanTriggered",
+        "GateAutoApproved",
       ];
 
       for (const eventType of structuredEvents) {
@@ -143,7 +114,8 @@ export function useExecutions(connectionRef: React.RefObject<HubConnection | nul
     async (
       workflowId: string,
       workflowName: string,
-      inputMessage: string
+      inputMessage: string,
+      autoApproveGates?: boolean
     ): Promise<string> => {
       const connection = connectionRef.current;
       if (!connection || connection.state !== HubConnectionState.Connected) {
@@ -155,7 +127,8 @@ export function useExecutions(connectionRef: React.RefObject<HubConnection | nul
         const executionId = await connection.invoke<string>(
           "ExecuteWorkflow",
           workflowId,
-          inputMessage
+          inputMessage,
+          autoApproveGates ?? null
         );
         if (!executionId) return "";
 

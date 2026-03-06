@@ -110,7 +110,7 @@ internal sealed class BlobPlanPollingService : BackgroundService
                 _logger.LogInformation("Processing blob '{BlobName}' for workflow {WorkflowId}",
                     blob.Name, workflow.Id);
 
-                await foreach (WorkflowExecutionEvent evt in engine.ExecuteStreamingAsync(workflow, content, ct))
+                await foreach (WorkflowExecutionEvent evt in engine.ExecuteStreamingAsync(workflow, content, ct: ct))
                 {
                     // Log execution events for blob-triggered runs (no SignalR client)
                     if (evt.EventType == ExecutionEventType.Error)

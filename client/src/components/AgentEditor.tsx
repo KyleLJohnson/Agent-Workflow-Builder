@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Save, Server, Settings } from "lucide-react";
-import type { AgentDefinition, CreateAgentRequest, McpServerConfig } from "../types";
+import type { AgentDefinition, CreateAgentRequest, McpServerConfig } from "@/types";
 
 interface AgentEditorProps {
   agent: AgentDefinition | null; // null = create mode

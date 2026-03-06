@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import istanbul from 'vite-plugin-istanbul';
+import path from 'path';
 
 export default defineConfig({
   plugins: [
@@ -11,6 +12,11 @@ export default defineConfig({
       ? [istanbul({ include: 'src/**/*', extension: ['.ts', '.tsx'] })]
       : []),
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
   server: {
     port: 5173,
     proxy: {

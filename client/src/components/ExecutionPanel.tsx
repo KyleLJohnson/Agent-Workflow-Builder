@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, memo } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -18,7 +18,7 @@ import {
   X,
   Square,
 } from "lucide-react";
-import type { ExecutionEvent, ExecutionState } from "../types";
+import type { ExecutionEvent, ExecutionState } from "@/types";
 
 interface ExecutionPanelProps {
   events: ExecutionEvent[];
@@ -38,7 +38,7 @@ interface ExecutionPanelProps {
   onCloseExecution?: (executionId: string) => void;
 }
 
-function EventIcon({ type }: { type: ExecutionEvent["type"] }) {
+const EventIcon = memo(function EventIcon({ type }: { type: ExecutionEvent["type"] }) {
   switch (type) {
     case "ExecutionStarted":
       return <Play size={14} className="text-blue-400" />;
@@ -58,6 +58,8 @@ function EventIcon({ type }: { type: ExecutionEvent["type"] }) {
       return <ShieldCheck size={14} className="text-amber-400 animate-pulse" />;
     case "GateApproved":
       return <ShieldCheck size={14} className="text-green-400" />;
+    case "GateAutoApproved":
+      return <ShieldCheck size={14} className="text-green-400" />;
     case "GateRejected":
       return <ShieldCheck size={14} className="text-red-400" />;
     case "LoopIterationStarted":
@@ -71,9 +73,9 @@ function EventIcon({ type }: { type: ExecutionEvent["type"] }) {
     default:
       return null;
   }
-}
+});
 
-function EventLabel({ type }: { type: ExecutionEvent["type"] }) {
+const EventLabel = memo(function EventLabel({ type }: { type: ExecutionEvent["type"] }) {
   switch (type) {
     case "ExecutionStarted":
       return <span className="text-blue-400 font-medium">Execution Started</span>;
@@ -93,6 +95,8 @@ function EventLabel({ type }: { type: ExecutionEvent["type"] }) {
       return <span className="text-amber-400 font-medium">Gate Awaiting Approval</span>;
     case "GateApproved":
       return <span className="text-green-400 font-medium">Gate Approved</span>;
+    case "GateAutoApproved":
+      return <span className="text-green-400 font-medium">Gate Auto-approved</span>;
     case "GateRejected":
       return <span className="text-red-400 font-medium">Gate Rejected</span>;
     case "LoopIterationStarted":
@@ -106,7 +110,7 @@ function EventLabel({ type }: { type: ExecutionEvent["type"] }) {
     default:
       return null;
   }
-}
+});
 
 export default function ExecutionPanel({
   events,
@@ -273,7 +277,7 @@ export default function ExecutionPanel({
                 ) : (
                   logEvents.map((evt, i) => (
                     <div
-                      key={i}
+                      key={`${evt.type}-${evt.timestamp}-${i}`}
                       className="flex items-start gap-2 text-xs animate-fade-in"
                     >
                       <span className="shrink-0 mt-0.5">
@@ -330,11 +334,11 @@ export default function ExecutionPanel({
                   </div>
                 ) : (
                   <>
-                    {events.map((evt, i) => {
+                    {events.map((evt) => {
                       // Loop iteration headers
                       if (evt.type === "LoopIterationStarted") {
                         return (
-                          <div key={`loop-${i}`} className="flex items-center gap-2 py-1">
+                          <div key={`loop-${evt.executionId}-${evt.timestamp}`} className="flex items-center gap-2 py-1">
                             <RefreshCw size={12} className="text-blue-400" />
                             <span className="text-[11px] font-medium text-blue-400">
                               Loop iteration {evt.loopIteration}/{evt.maxIterations}
@@ -346,7 +350,7 @@ export default function ExecutionPanel({
 
                       if (evt.type === "LoopIterationCompleted") {
                         return (
-                          <div key={`loop-done-${i}`} className="flex items-center gap-2 py-1">
+                          <div key={`loop-done-${evt.executionId}-${evt.timestamp}`} className="flex items-center gap-2 py-1">
                             <CheckCircle2 size={12} className="text-green-400" />
                             <span className="text-[10px] text-slate-500">
                               {evt.message || `Iteration ${evt.loopIteration} completed`}
@@ -358,7 +362,7 @@ export default function ExecutionPanel({
                       // Plan generated card
                       if (evt.type === "PlanGenerated" && evt.planSteps) {
                         return (
-                          <div key={`plan-${i}`} className="rounded border border-purple-600/40 bg-purple-900/20 overflow-hidden animate-fade-in">
+                          <div key={`plan-${evt.executionId}-${evt.timestamp}`} className="rounded border border-purple-600/40 bg-purple-900/20 overflow-hidden animate-fade-in">
                             <div className="px-2.5 py-1.5 bg-purple-900/30 flex items-center gap-1.5">
                               <MapIcon size={12} className="text-purple-400" />
                               <span className="text-[11px] font-medium text-purple-300">
@@ -385,10 +389,10 @@ export default function ExecutionPanel({
 
                       // Clarification card
                       if (evt.type === "ClarificationNeeded" && evt.executionId) {
-                        const clarKey = `${evt.executionId}-${i}`;
+                        const clarKey = `${evt.executionId}-${evt.timestamp}`;
                         const isSubmitted = submittedClarifications.has(clarKey);
                         return (
-                          <div key={`clar-${i}`} className="rounded border-l-4 border-l-amber-500 border border-slate-700 bg-slate-800/70 p-3 animate-fade-in">
+                          <div key={`clar-${evt.executionId}-${evt.timestamp}`} className="rounded border-l-4 border-l-amber-500 border border-slate-700 bg-slate-800/70 p-3 animate-fade-in">
                             <div className="flex items-center gap-1.5 mb-2">
                               <MessageCircle size={12} className="text-amber-400" />
                               <span className="text-[11px] font-medium text-amber-300">
@@ -430,11 +434,11 @@ export default function ExecutionPanel({
 
                       // Gate awaiting approval card
                       if (evt.type === "GateAwaitingApproval" && evt.executionId) {
-                        const gateKey = `${evt.executionId}-${i}`;
+                        const gateKey = `${evt.executionId}-${evt.timestamp}`;
                         const isSubmitted = submittedGates.has(gateKey);
                         const isReviewEdit = evt.gateType === "ReviewAndEdit";
                         return (
-                          <div key={`gate-${i}`} className="rounded border-l-4 border-l-blue-500 border border-slate-700 bg-slate-800/70 p-3 animate-fade-in">
+                          <div key={`gate-${evt.executionId}-${evt.timestamp}`} className="rounded border-l-4 border-l-blue-500 border border-slate-700 bg-slate-800/70 p-3 animate-fade-in">
                             <div className="flex items-center gap-1.5 mb-2">
                               <ShieldCheck size={12} className="text-blue-400" />
                               <span className="text-[11px] font-medium text-blue-300">
@@ -545,8 +549,8 @@ export default function ExecutionPanel({
                         {/* Collapsible body */}
                         {isOpen && (
                           <div className="px-2.5 py-2 space-y-2">
-                            {group.events.map((evt, j) => (
-                              <div key={j}>
+                            {group.events.map((evt) => (
+                              <div key={`${evt.agentName}-${evt.timestamp}`}>
                                 <span className="text-slate-600 text-[10px]">
                                   {new Date(evt.timestamp).toLocaleTimeString()}
                                 </span>

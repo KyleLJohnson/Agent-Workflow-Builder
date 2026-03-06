@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   LogOut,
 } from "lucide-react";
-import type { WorkflowDefinition } from "../types";
+import type { WorkflowDefinition } from "@/types";
 
 interface WorkflowToolbarProps {
   workflowName: string;
@@ -29,6 +29,8 @@ interface WorkflowToolbarProps {
   blobContainerName?: string | null;
   onBlobContainerNameChange?: (name: string) => void;
   runningExecutionCount?: number;
+  autoApproveGates: boolean;
+  onAutoApproveChange: (value: boolean) => void;
   userName?: string | null;
   onLogout?: () => void;
 }
@@ -49,6 +51,8 @@ export default function WorkflowToolbar({
   blobContainerName,
   onBlobContainerNameChange,
   runningExecutionCount,
+  autoApproveGates,
+  onAutoApproveChange,
   userName,
   onLogout,
 }: WorkflowToolbarProps) {
@@ -213,6 +217,21 @@ export default function WorkflowToolbar({
 
       {/* Separator */}
       <div className="w-px h-6 bg-slate-600 mx-1" />
+
+      {/* Auto-approve toggle */}
+      <label
+        className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-300 cursor-pointer select-none"
+        title="When enabled, gate nodes are automatically approved during execution"
+      >
+        <input
+          type="checkbox"
+          checked={autoApproveGates}
+          onChange={(e) => onAutoApproveChange(e.target.checked)}
+          className="accent-green-500 cursor-pointer"
+        />
+        <ShieldCheck size={14} />
+        Auto-approve
+      </label>
 
       {/* Execute */}
       <button

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgentWorkflowBuilder.Core.Models;
 
 namespace AgentWorkflowBuilder.Core.Tests.Models;
@@ -133,5 +134,25 @@ public class WorkflowDefinitionTests
 
         Assert.Equal(GateType.ReviewAndEdit, config.GateType);
         Assert.Equal("n1", config.SendBackTargetNodeId);
+    }
+
+    [Fact]
+    public void WhenDefaultThenAutoApproveGatesIsFalse()
+    {
+        WorkflowDefinition workflow = new();
+
+        Assert.False(workflow.AutoApproveGates);
+    }
+
+    [Fact]
+    public void WhenAutoApproveGatesSetThenRoundTrips()
+    {
+        WorkflowDefinition workflow = new() { AutoApproveGates = true };
+
+        string json = JsonSerializer.Serialize(workflow);
+        WorkflowDefinition? deserialized = JsonSerializer.Deserialize<WorkflowDefinition>(json);
+
+        Assert.NotNull(deserialized);
+        Assert.True(deserialized.AutoApproveGates);
     }
 }

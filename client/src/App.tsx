@@ -1,88 +1,48 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useNodesState, useEdgesState, type Node, type Edge } from "@xyflow/react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from "@azure/msal-react";
-import AgentPanel from "./components/AgentPanel";
-import AgentEditor from "./components/AgentEditor";
-import McpSettingsPanel from "./components/McpSettingsPanel";
-import WorkflowCanvas, {
-  workflowNodesToFlow,
-  workflowEdgesToFlow,
-  flowToWorkflowNodes,
-  flowToWorkflowEdges,
-} from "./components/WorkflowCanvas";
-import WorkflowToolbar from "./components/WorkflowToolbar";
-import WorkflowListView from "./components/WorkflowListView";
-import ExecutionPanel from "./components/ExecutionPanel";
-import { useSignalR } from "./hooks/useSignalR";
-import { useExecutions } from "./hooks/useExecutions";
-import { isAuthConfigured, loginRequest } from "./authConfig";
-import * as api from "./api";
-import type {
-  AgentDefinition,
-  WorkflowDefinition,
-  CreateAgentRequest,
-  McpServerConfig,
-} from "./types";
+import AgentPanel from "@/components/AgentPanel";
+import WorkflowCanvas from "@/components/WorkflowCanvas";
+import WorkflowToolbar from "@/components/WorkflowToolbar";
+import WorkflowListView from "@/components/WorkflowListView";
+import ExecutionPanel from "@/components/ExecutionPanel";
+import { useSignalR } from "@/hooks/useSignalR";
+import { useExecutions } from "@/hooks/useExecutions";
+import { isAuthConfigured, loginRequest } from "@/authConfig";
+import { AgentProvider, useAgentContext } from "@/contexts/AgentContext";
+import { WorkflowProvider, useWorkflowContext } from "@/contexts/WorkflowContext";
+import type { McpServerConfig } from "@/types";
+import * as api from "@/api";
+
+const AgentEditor = lazy(() => import("@/components/AgentEditor"));
+const McpSettingsPanel = lazy(() => import("@/components/McpSettingsPanel"));
 
 export default function App() {
+  return (
+    <AgentProvider>
+      <AppWithWorkflow />
+    </AgentProvider>
+  );
+}
+
+function AppWithWorkflow() {
+  const { agents } = useAgentContext();
+  return (
+    <WorkflowProvider agents={agents}>
+      <AppContent />
+    </WorkflowProvider>
+  );
+}
+
+function AppContent() {
   const { instance, accounts } = useMsal();
   const authEnabled = isAuthConfigured();
   const userName = accounts[0]?.name ?? accounts[0]?.username;
 
-  const handleLogin = () => instance.loginRedirect(loginRequest);
-  const handleLogout = () => instance.logoutRedirect();
+  const handleLogin = useCallback(() => instance.loginRedirect(loginRequest), [instance]);
+  const handleLogout = useCallback(() => instance.logoutRedirect(), [instance]);
 
-  // ─── Agents ──────────────────────────────────────────────
-  const [agents, setAgents] = useState<AgentDefinition[]>([]);
-  const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
-  const [showAgentEditor, setShowAgentEditor] = useState(false);
-
-  const loadAgents = useCallback(async () => {
-    try {
-      const data = await api.getAgents();
-      setAgents(data);
-    } catch (err) {
-      console.error("Failed to load agents:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAgents();
-  }, [loadAgents]);
-
-  const handleCreateAgent = () => {
-    setEditingAgent(null);
-    setShowAgentEditor(true);
-  };
-
-  const handleEditAgent = (agent: AgentDefinition) => {
-    setEditingAgent(agent);
-    setShowAgentEditor(true);
-  };
-
-  const [agentError, setAgentError] = useState<string | null>(null);
-  const [isSavingAgent, setIsSavingAgent] = useState(false);
-
-  const handleSaveAgent = async (data: CreateAgentRequest) => {
-    setAgentError(null);
-    setIsSavingAgent(true);
-    try {
-      if (editingAgent) {
-        await api.updateAgent(editingAgent.id, data);
-      } else {
-        await api.createAgent(data);
-      }
-      await loadAgents();
-      setShowAgentEditor(false);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to save agent";
-      setAgentError(message);
-      console.error("Failed to save agent:", err);
-    } finally {
-      setIsSavingAgent(false);
-    }
-  };
+  const agentCtx = useAgentContext();
+  const wfCtx = useWorkflowContext();
 
   // ─── MCP Servers ─────────────────────────────────────────
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
@@ -101,105 +61,11 @@ export default function App() {
     loadMcpServers();
   }, [loadMcpServers]);
 
-  const handleOpenMcpSettings = () => {
+  const handleOpenMcpSettings = useCallback(() => {
     setShowMcpSettings(true);
-  };
-
-  // ─── Workflows ───────────────────────────────────────────
-  const [savedWorkflows, setSavedWorkflows] = useState<WorkflowDefinition[]>([]);
-  const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowDefinition | null>(null);
-  const [workflowName, setWorkflowName] = useState("Untitled Workflow");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // React Flow state
-  const initialNodes: Node[] = [];
-  const initialEdges: Edge[] = [];
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  const loadWorkflows = useCallback(async () => {
-    try {
-      const data = await api.getWorkflows();
-      setSavedWorkflows(data);
-    } catch (err) {
-      console.error("Failed to load workflows:", err);
-    }
   }, []);
 
-  useEffect(() => {
-    loadWorkflows();
-  }, [loadWorkflows]);
-
-  // Mark unsaved changes when nodes/edges change
-  useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [nodes, edges, workflowName]);
-
-  const handleLoadWorkflow = useCallback(
-    async (wf: WorkflowDefinition) => {
-      try {
-        const full = await api.getWorkflow(wf.id);
-        setCurrentWorkflow(full);
-        setWorkflowName(full.name);
-        setNodes(workflowNodesToFlow(full.nodes, agents));
-        setEdges(workflowEdgesToFlow(full.edges));
-        setHasUnsavedChanges(false);
-      } catch (err) {
-        console.error("Failed to load workflow:", err);
-      }
-    },
-    [agents, setNodes, setEdges]
-  );
-
-  const handleNewWorkflow = () => {
-    setCurrentWorkflow(null);
-    setWorkflowName("Untitled Workflow");
-    setNodes([]);
-    setEdges([]);
-    setHasUnsavedChanges(false);
-  };
-
-  const handleSaveWorkflow = async () => {
-    setIsSaving(true);
-    try {
-      const payload = {
-        name: workflowName,
-        description: "",
-        nodes: flowToWorkflowNodes(nodes),
-        edges: flowToWorkflowEdges(edges),
-      };
-
-      if (currentWorkflow) {
-        const updated = await api.updateWorkflow(currentWorkflow.id, payload);
-        setCurrentWorkflow(updated);
-      } else {
-        const created = await api.createWorkflow(payload);
-        setCurrentWorkflow(created);
-      }
-      setHasUnsavedChanges(false);
-      await loadWorkflows();
-    } catch (err) {
-      console.error("Failed to save workflow:", err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteWorkflow = async () => {
-    if (!currentWorkflow) return;
-    if (!confirm("Delete this workflow?")) return;
-    try {
-      await api.deleteWorkflow(currentWorkflow.id);
-      handleNewWorkflow();
-      await loadWorkflows();
-    } catch (err) {
-      console.error("Failed to delete workflow:", err);
-    }
-  };
-
   // ─── Execution ───────────────────────────────────────────
-  // Use a stable ref to break the circular dependency between useSignalR and useExecutions.
   // useSignalR creates the connection; useExecutions registers its own event handlers on it.
   const execsRef = useRef<ReturnType<typeof useExecutions> | null>(null);
 
@@ -232,56 +98,58 @@ export default function App() {
 
   const handleExecute = useCallback(
     async (inputMessage: string) => {
-      if (!currentWorkflow) return;
-      await execs.startExecution(currentWorkflow.id, currentWorkflow.name, inputMessage);
+      if (!wfCtx.currentWorkflow) return;
+      await execs.startExecution(wfCtx.currentWorkflow.id, wfCtx.currentWorkflow.name, inputMessage, wfCtx.autoApproveGates);
     },
-    [currentWorkflow, execs]
+    [wfCtx.currentWorkflow, wfCtx.autoApproveGates, execs]
   );
 
-  const handleToolbarExecute = () => {
-    if (!currentWorkflow) return;
+  const handleToolbarExecute = useCallback(() => {
+    if (!wfCtx.currentWorkflow) return;
     handleExecute("Hello");
-  };
+  }, [wfCtx.currentWorkflow, handleExecute]);
 
   // ─── Render ──────────────────────────────────────────────
   const mainContent = (
     <div className="flex h-screen w-screen overflow-hidden">
       {/* Left: Agent Panel */}
       <AgentPanel
-        agents={agents}
-        onCreateAgent={handleCreateAgent}
-        onEditAgent={handleEditAgent}
+        agents={agentCtx.agents}
+        onCreateAgent={agentCtx.handleCreateAgent}
+        onEditAgent={agentCtx.handleEditAgent}
       />
 
       {/* Center: Canvas + Toolbar + Execution OR Landing View */}
       <div className="flex-1 flex flex-col min-w-0">
-        {currentWorkflow ? (
+        {wfCtx.currentWorkflow ? (
           <>
             <WorkflowToolbar
-              workflowName={workflowName}
-              onNameChange={setWorkflowName}
-              onSave={handleSaveWorkflow}
-              onNew={handleNewWorkflow}
-              onDelete={handleDeleteWorkflow}
-              onLoad={handleLoadWorkflow}
+              workflowName={wfCtx.workflowName}
+              onNameChange={wfCtx.setWorkflowName}
+              onSave={wfCtx.handleSaveWorkflow}
+              onNew={wfCtx.handleNewWorkflow}
+              onDelete={wfCtx.handleDeleteWorkflow}
+              onLoad={wfCtx.handleLoadWorkflow}
               onExecute={handleToolbarExecute}
-              savedWorkflows={savedWorkflows}
-              currentWorkflowId={currentWorkflow?.id ?? null}
-              isSaving={isSaving}
+              savedWorkflows={wfCtx.savedWorkflows}
+              currentWorkflowId={wfCtx.currentWorkflow?.id ?? null}
+              isSaving={wfCtx.isSaving}
               isExecuting={execs.runningCount > 0}
-              hasUnsavedChanges={hasUnsavedChanges}
+              hasUnsavedChanges={wfCtx.hasUnsavedChanges}
               runningExecutionCount={execs.runningCount}
+              autoApproveGates={wfCtx.autoApproveGates}
+              onAutoApproveChange={wfCtx.setAutoApproveGates}
               userName={userName}
               onLogout={authEnabled ? handleLogout : undefined}
             />
 
             <WorkflowCanvas
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              setNodes={setNodes}
-              setEdges={setEdges}
+              nodes={wfCtx.nodes}
+              edges={wfCtx.edges}
+              onNodesChange={wfCtx.onNodesChange}
+              onEdgesChange={wfCtx.onEdgesChange}
+              setNodes={wfCtx.setNodes}
+              setEdges={wfCtx.setEdges}
               executingNodeIds={executingNodeIds}
             />
 
@@ -291,7 +159,7 @@ export default function App() {
               isExecuting={execs.selectedExecution?.status === "running"}
               onExecute={handleExecute}
               onClear={() => execs.selectedExecutionId && execs.closeExecution(execs.selectedExecutionId)}
-              workflowId={currentWorkflow?.id ?? null}
+              workflowId={wfCtx.currentWorkflow?.id ?? null}
               onAnswerClarification={(executionId, answer) =>
                 execs.answerClarification(executionId, answer)
               }
@@ -315,32 +183,36 @@ export default function App() {
           </>
         ) : (
           <WorkflowListView
-            workflows={savedWorkflows}
-            onSelect={handleLoadWorkflow}
-            onCreateNew={handleNewWorkflow}
+            workflows={wfCtx.savedWorkflows}
+            onSelect={wfCtx.handleLoadWorkflow}
+            onCreateNew={wfCtx.handleNewWorkflow}
           />
         )}
       </div>
 
       {/* Agent Editor Modal */}
-      {showAgentEditor && (
-        <AgentEditor
-          agent={editingAgent}
-          onSave={handleSaveAgent}
-          onClose={() => { setShowAgentEditor(false); setAgentError(null); }}
-          error={agentError}
-          isSaving={isSavingAgent}
-          mcpServers={mcpServers}
-          onOpenMcpSettings={handleOpenMcpSettings}
-        />
+      {agentCtx.showAgentEditor && (
+        <Suspense>
+          <AgentEditor
+            agent={agentCtx.editingAgent}
+            onSave={agentCtx.handleSaveAgent}
+            onClose={agentCtx.closeAgentEditor}
+            error={agentCtx.agentError}
+            isSaving={agentCtx.isSavingAgent}
+            mcpServers={mcpServers}
+            onOpenMcpSettings={handleOpenMcpSettings}
+          />
+        </Suspense>
       )}
 
       {/* MCP Settings Modal */}
       {showMcpSettings && (
-        <McpSettingsPanel
-          onClose={() => setShowMcpSettings(false)}
-          onServersChanged={loadMcpServers}
-        />
+        <Suspense>
+          <McpSettingsPanel
+            onClose={() => setShowMcpSettings(false)}
+            onServersChanged={loadMcpServers}
+          />
+        </Suspense>
       )}
     </div>
   );
