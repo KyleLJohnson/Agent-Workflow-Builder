@@ -21,15 +21,17 @@ public class JsonWorkflowStore : IWorkflowStore
         Directory.CreateDirectory(_workflowDir);
     }
 
-    public async Task<IReadOnlyList<WorkflowDefinition>> ListAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<WorkflowDefinition>> ListAsync(string? userId = null, CancellationToken ct = default)
     {
-        var workflows = new List<WorkflowDefinition>();
+        List<WorkflowDefinition> workflows = [];
         if (!Directory.Exists(_workflowDir)) return workflows.AsReadOnly();
 
-        foreach (var file in Directory.GetFiles(_workflowDir, "*.json"))
+        foreach (string file in Directory.GetFiles(_workflowDir, "*.json"))
         {
-            var workflow = await ReadFileAsync(file, ct);
-            if (workflow != null) workflows.Add(workflow);
+            WorkflowDefinition? workflow = await ReadFileAsync(file, ct);
+            if (workflow is null) continue;
+            if (userId is not null && workflow.UserId != userId) continue;
+            workflows.Add(workflow);
         }
 
         return workflows.AsReadOnly();

@@ -31,6 +31,8 @@ public class CopilotProviderFactory
             ApiKey = apiKey
         };
 
+        DefaultModel = configuration["CopilotSdk:DefaultModel"] ?? "gpt-4.1-mini";
+
         // Set Azure-specific config when using Azure provider
         if (type.Equals("azure", StringComparison.OrdinalIgnoreCase))
         {
@@ -46,5 +48,5 @@ public class CopilotProviderFactory
     /// <summary>
     /// Returns the default model name from configuration.
     /// </summary>
-    public string DefaultModel { get; init; } = "gpt-4.1-mini";
+    public string DefaultModel { get; }
 }

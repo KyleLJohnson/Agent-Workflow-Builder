@@ -43,6 +43,12 @@ public record AgentDefinition
     [JsonPropertyName("mcpServerIds")]
     public List<string> McpServerIds { get; init; } = [];
 
+    [JsonPropertyName("allowClarification")]
+    public bool AllowClarification { get; init; } = true;
+
+    [JsonPropertyName("agentType")]
+    public string AgentType { get; init; } = "standard";
+
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 

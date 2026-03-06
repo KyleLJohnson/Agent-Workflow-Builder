@@ -24,6 +24,12 @@ public record WorkflowDefinition
 
     [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; init; } = DateTime.UtcNow;
+
+    [JsonPropertyName("userId")]
+    public string? UserId { get; init; }
+
+    [JsonPropertyName("blobContainerName")]
+    public string? BlobContainerName { get; init; }
 }
 
 /// <summary>
@@ -46,8 +52,36 @@ public record WorkflowNode
     [JsonPropertyName("positionY")]
     public double PositionY { get; init; }
 
+    [JsonPropertyName("nodeType")]
+    public string NodeType { get; init; } = "agent";
+
+    [JsonPropertyName("gateConfig")]
+    public GateConfiguration? GateConfig { get; init; }
+
     [JsonPropertyName("configOverrides")]
     public Dictionary<string, string>? ConfigOverrides { get; init; }
+}
+
+/// <summary>
+/// Configuration for a gate node (approval or review-and-edit).
+/// </summary>
+public record GateConfiguration
+{
+    [JsonPropertyName("gateType")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public GateType GateType { get; init; }
+
+    [JsonPropertyName("instructions")]
+    public string? Instructions { get; init; }
+
+    [JsonPropertyName("sendBackTargetNodeId")]
+    public string? SendBackTargetNodeId { get; init; }
+}
+
+public enum GateType
+{
+    Approval,
+    ReviewAndEdit
 }
 
 /// <summary>
@@ -63,4 +97,10 @@ public record WorkflowEdge
 
     [JsonPropertyName("targetNodeId")]
     public string TargetNodeId { get; init; } = string.Empty;
+
+    [JsonPropertyName("isBackEdge")]
+    public bool IsBackEdge { get; init; }
+
+    [JsonPropertyName("maxIterations")]
+    public int? MaxIterations { get; init; }
 }

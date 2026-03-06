@@ -155,5 +155,36 @@ public static class AgentSeeder
             InputDescription = "Writing prompt, outline, or brief describing desired content",
             OutputDescription = "Polished, ready-to-use content matching the requested style"
         };
+
+        yield return new AgentDefinition
+        {
+            Id = "builtin-planner",
+            Name = "Planner",
+            Description = "Decomposes complex goals into a structured execution plan with agent assignments.",
+            SystemInstructions = """
+                You are a planning and orchestration agent. Given a high-level goal or task,
+                decompose it into a numbered list of concrete steps. For each step, suggest
+                which type of agent should handle it.
+
+                Output your plan inside <<<PLAN>>> and <<<END_PLAN>>> markers using this format:
+                <<<PLAN>>>
+                1. [Step Title] | [agent_hint: agent_name_or_category]: Detailed instruction for this step
+                2. [Step Title] | [agent_hint: agent_name_or_category]: Detailed instruction for this step
+                <<<END_PLAN>>>
+
+                Rules:
+                - Each step should be self-contained and actionable
+                - Use descriptive agent hints (e.g., "summarizer", "code-reviewer", "content-writer")
+                - Keep steps ordered logically — later steps may depend on earlier ones
+                - Include 2-8 steps for most tasks
+                - After the plan block, provide a brief summary of the overall approach
+                """,
+            Category = "Planning",
+            Icon = "🗺️",
+            IsBuiltIn = true,
+            AgentType = "planner",
+            InputDescription = "A high-level goal or complex task to decompose into steps",
+            OutputDescription = "Structured execution plan with numbered steps and agent assignments"
+        };
     }
 }

@@ -24,6 +24,8 @@ const CATEGORIES = [
   "Other",
 ];
 
+const AGENT_TYPES = ["standard", "planner"] as const;
+
 const EMPTY_FORM: CreateAgentRequest = {
   name: "",
   description: "",
@@ -35,6 +37,8 @@ const EMPTY_FORM: CreateAgentRequest = {
   modelOverride: null,
   temperature: null,
   mcpServerIds: [],
+  allowClarification: true,
+  agentType: "standard",
 };
 
 export default function AgentEditor({
@@ -64,6 +68,8 @@ export default function AgentEditor({
         modelOverride: agent.modelOverride ?? null,
         temperature: agent.temperature ?? null,
         mcpServerIds: agent.mcpServerIds ?? [],
+        allowClarification: agent.allowClarification ?? true,
+        agentType: agent.agentType ?? "standard",
       });
     } else {
       setForm(EMPTY_FORM);
@@ -236,6 +242,43 @@ export default function AgentEditor({
                            text-sm text-slate-200 px-3 outline-none focus:border-blue-500
                            transition-colors placeholder-slate-500"
               />
+            </div>
+          </div>
+
+          {/* Agent Type + Allow Clarification */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">
+                Agent Type
+              </label>
+              <select
+                value={form.agentType ?? "standard"}
+                onChange={(e) => set("agentType", e.target.value)}
+                disabled={isBuiltIn}
+                className="w-full h-10 bg-slate-700 border border-slate-600 rounded-lg
+                           text-sm text-slate-200 px-3 outline-none focus:border-blue-500
+                           transition-colors"
+              >
+                {AGENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end pb-1">
+              <label
+                className={`flex items-center gap-2 cursor-pointer ${isBuiltIn ? "opacity-60 pointer-events-none" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.allowClarification ?? true}
+                  onChange={(e) => set("allowClarification", e.target.checked)}
+                  disabled={isBuiltIn}
+                  className="accent-blue-500"
+                />
+                <span className="text-sm text-slate-300">Allow Clarification</span>
+              </label>
             </div>
           </div>
 

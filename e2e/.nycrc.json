@@ -1,0 +1,7 @@
+{
+  "all": true,
+  "include": ["../client/src/**/*.{ts,tsx}"],
+  "exclude": ["**/*.d.ts", "**/node_modules/**"],
+  "reporter": ["text", "html", "lcov"],
+  "report-dir": "./coverage"
+}

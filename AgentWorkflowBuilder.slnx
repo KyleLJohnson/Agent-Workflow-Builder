@@ -5,4 +5,8 @@
     <Project Path="src/AgentWorkflowBuilder.Core/AgentWorkflowBuilder.Core.csproj" />
     <Project Path="src/AgentWorkflowBuilder.Persistence/AgentWorkflowBuilder.Persistence.csproj" />
   </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/AgentWorkflowBuilder.Core.Tests/AgentWorkflowBuilder.Core.Tests.csproj" />
+    <Project Path="test/AgentWorkflowBuilder.Persistence.Tests/AgentWorkflowBuilder.Persistence.Tests.csproj" />
+  </Folder>
 </Solution>

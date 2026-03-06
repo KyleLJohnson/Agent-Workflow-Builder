@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
-  retries: 0,
+  retries: 1,
   reporter: "list",
   use: {
     baseURL: "http://localhost:5175",
@@ -17,6 +17,10 @@ export default defineConfig({
     {
       name: "chromium",
       use: { browserName: "chromium" },
+    },
+    {
+      name: "firefox",
+      use: { browserName: "firefox" },
     },
   ],
 });

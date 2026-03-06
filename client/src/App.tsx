@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNodesState, useEdgesState, type Node, type Edge } from "@xyflow/react";
+import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from "@azure/msal-react";
 import AgentPanel from "./components/AgentPanel";
 import AgentEditor from "./components/AgentEditor";
 import McpSettingsPanel from "./components/McpSettingsPanel";
@@ -10,8 +11,11 @@ import WorkflowCanvas, {
   flowToWorkflowEdges,
 } from "./components/WorkflowCanvas";
 import WorkflowToolbar from "./components/WorkflowToolbar";
+import WorkflowListView from "./components/WorkflowListView";
 import ExecutionPanel from "./components/ExecutionPanel";
 import { useSignalR } from "./hooks/useSignalR";
+import { useExecutions } from "./hooks/useExecutions";
+import { isAuthConfigured, loginRequest } from "./authConfig";
 import * as api from "./api";
 import type {
   AgentDefinition,
@@ -21,6 +25,13 @@ import type {
 } from "./types";
 
 export default function App() {
+  const { instance, accounts } = useMsal();
+  const authEnabled = isAuthConfigured();
+  const userName = accounts[0]?.name ?? accounts[0]?.username;
+
+  const handleLogin = () => instance.loginRedirect(loginRequest);
+  const handleLogout = () => instance.logoutRedirect();
+
   // ─── Agents ──────────────────────────────────────────────
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
@@ -188,13 +199,23 @@ export default function App() {
   };
 
   // ─── Execution ───────────────────────────────────────────
-  const { isConnected, events, executeWorkflow, clearEvents } = useSignalR();
-  const [isExecuting, setIsExecuting] = useState(false);
+  // Use a stable ref to break the circular dependency between useSignalR and useExecutions.
+  // useSignalR creates the connection; useExecutions registers its own event handlers on it.
+  const execsRef = useRef<ReturnType<typeof useExecutions> | null>(null);
 
-  // Track which nodes are currently executing (match by nodeId or agentName)
+  const {
+    connectionRef,
+    isConnected,
+  } = useSignalR((conn) => execsRef.current?.registerEventHandlers(conn));
+
+  const execs = useExecutions(connectionRef);
+  execsRef.current = execs;
+
+  // Track which nodes are currently executing for the selected execution
   const executingNodeIds = useMemo(() => {
     const running = new Set<string>();
-    for (const evt of events) {
+    const selectedEvents = execs.selectedExecution?.events ?? [];
+    for (const evt of selectedEvents) {
       const key = evt.nodeId ?? evt.agentName;
       if (evt.type === "AgentStepStarted" && key) {
         running.add(key);
@@ -207,42 +228,23 @@ export default function App() {
       }
     }
     return running;
-  }, [events]);
-
-  // Detect execution end
-  useEffect(() => {
-    const last = events[events.length - 1];
-    if (
-      last &&
-      (last.type === "ExecutionCompleted" || last.type === "Error")
-    ) {
-      setIsExecuting(false);
-    }
-  }, [events]);
+  }, [execs.selectedExecution?.events]);
 
   const handleExecute = useCallback(
     async (inputMessage: string) => {
       if (!currentWorkflow) return;
-      setIsExecuting(true);
-      clearEvents();
-      try {
-        await executeWorkflow(currentWorkflow.id, inputMessage);
-      } catch (err) {
-        console.error("Execution failed:", err);
-        setIsExecuting(false);
-      }
+      await execs.startExecution(currentWorkflow.id, currentWorkflow.name, inputMessage);
     },
-    [currentWorkflow, executeWorkflow, clearEvents]
+    [currentWorkflow, execs]
   );
 
   const handleToolbarExecute = () => {
     if (!currentWorkflow) return;
-    // Open the execution panel input; just trigger with a default message
     handleExecute("Hello");
   };
 
   // ─── Render ──────────────────────────────────────────────
-  return (
+  const mainContent = (
     <div className="flex h-screen w-screen overflow-hidden">
       {/* Left: Agent Panel */}
       <AgentPanel
@@ -251,41 +253,73 @@ export default function App() {
         onEditAgent={handleEditAgent}
       />
 
-      {/* Center: Canvas + Toolbar + Execution */}
+      {/* Center: Canvas + Toolbar + Execution OR Landing View */}
       <div className="flex-1 flex flex-col min-w-0">
-        <WorkflowToolbar
-          workflowName={workflowName}
-          onNameChange={setWorkflowName}
-          onSave={handleSaveWorkflow}
-          onNew={handleNewWorkflow}
-          onDelete={handleDeleteWorkflow}
-          onLoad={handleLoadWorkflow}
-          onExecute={handleToolbarExecute}
-          savedWorkflows={savedWorkflows}
-          currentWorkflowId={currentWorkflow?.id ?? null}
-          isSaving={isSaving}
-          isExecuting={isExecuting}
-          hasUnsavedChanges={hasUnsavedChanges}
-        />
+        {currentWorkflow ? (
+          <>
+            <WorkflowToolbar
+              workflowName={workflowName}
+              onNameChange={setWorkflowName}
+              onSave={handleSaveWorkflow}
+              onNew={handleNewWorkflow}
+              onDelete={handleDeleteWorkflow}
+              onLoad={handleLoadWorkflow}
+              onExecute={handleToolbarExecute}
+              savedWorkflows={savedWorkflows}
+              currentWorkflowId={currentWorkflow?.id ?? null}
+              isSaving={isSaving}
+              isExecuting={execs.runningCount > 0}
+              hasUnsavedChanges={hasUnsavedChanges}
+              runningExecutionCount={execs.runningCount}
+              userName={userName}
+              onLogout={authEnabled ? handleLogout : undefined}
+            />
 
-        <WorkflowCanvas
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          setNodes={setNodes}
-          setEdges={setEdges}
-          executingNodeIds={executingNodeIds}
-        />
+            <WorkflowCanvas
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              setNodes={setNodes}
+              setEdges={setEdges}
+              executingNodeIds={executingNodeIds}
+            />
 
-        <ExecutionPanel
-          events={events}
-          isConnected={isConnected}
-          isExecuting={isExecuting}
-          onExecute={handleExecute}
-          onClear={clearEvents}
-          workflowId={currentWorkflow?.id ?? null}
-        />
+            <ExecutionPanel
+              events={execs.selectedExecution?.events ?? []}
+              isConnected={isConnected}
+              isExecuting={execs.selectedExecution?.status === "running"}
+              onExecute={handleExecute}
+              onClear={() => execs.selectedExecutionId && execs.closeExecution(execs.selectedExecutionId)}
+              workflowId={currentWorkflow?.id ?? null}
+              onAnswerClarification={(executionId, answer) =>
+                execs.answerClarification(executionId, answer)
+              }
+              onApproveGate={(executionId, editedOutput) =>
+                execs.approveGate(executionId, editedOutput)
+              }
+              onRejectGate={(executionId, reason) =>
+                execs.rejectGate(executionId, reason)
+              }
+              onSendBackGate={(executionId, feedback) =>
+                execs.sendBackGate(executionId, feedback)
+              }
+              onCancelExecution={(executionId) =>
+                execs.cancelExecution(executionId)
+              }
+              activeExecutionId={execs.selectedExecutionId ?? undefined}
+              executions={execs.executions}
+              onSelectExecution={execs.setSelectedExecutionId}
+              onCloseExecution={execs.closeExecution}
+            />
+          </>
+        ) : (
+          <WorkflowListView
+            workflows={savedWorkflows}
+            onSelect={handleLoadWorkflow}
+            onCreateNew={handleNewWorkflow}
+          />
+        )}
       </div>
 
       {/* Agent Editor Modal */}
@@ -309,5 +343,27 @@ export default function App() {
         />
       )}
     </div>
+  );
+
+  if (!authEnabled) return mainContent;
+
+  return (
+    <>
+      <AuthenticatedTemplate>{mainContent}</AuthenticatedTemplate>
+      <UnauthenticatedTemplate>
+        <div className="flex h-screen items-center justify-center bg-gray-900">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white mb-4">Agent Workflow Builder</h1>
+            <p className="text-gray-400 mb-6">Sign in to get started</p>
+            <button
+              onClick={handleLogin}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Sign in with Microsoft
+            </button>
+          </div>
+        </div>
+      </UnauthenticatedTemplate>
+    </>
   );
 }

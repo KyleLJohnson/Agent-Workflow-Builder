@@ -15,9 +15,12 @@
     "@vitejs/plugin-react": "^5.1.4",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vite-plugin-istanbul": "^7.2.1"
   },
   "dependencies": {
+    "@azure/msal-browser": "^4.29.0",
+    "@azure/msal-react": "^3.0.27",
     "@microsoft/signalr": "^10.0.0",
     "@xyflow/react": "^12.10.1",
     "axios": "^1.13.5",

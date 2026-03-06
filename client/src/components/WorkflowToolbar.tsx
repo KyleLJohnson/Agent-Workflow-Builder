@@ -8,6 +8,8 @@ import {
   ChevronDown,
   Check,
   Loader2,
+  ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import type { WorkflowDefinition } from "../types";
 
@@ -24,6 +26,11 @@ interface WorkflowToolbarProps {
   isSaving: boolean;
   isExecuting: boolean;
   hasUnsavedChanges: boolean;
+  blobContainerName?: string | null;
+  onBlobContainerNameChange?: (name: string) => void;
+  runningExecutionCount?: number;
+  userName?: string | null;
+  onLogout?: () => void;
 }
 
 export default function WorkflowToolbar({
@@ -39,6 +46,11 @@ export default function WorkflowToolbar({
   isSaving,
   isExecuting,
   hasUnsavedChanges,
+  blobContainerName,
+  onBlobContainerNameChange,
+  runningExecutionCount,
+  userName,
+  onLogout,
 }: WorkflowToolbarProps) {
   const [showLoadMenu, setShowLoadMenu] = useState(false);
   const loadMenuRef = useRef<HTMLDivElement>(null);
@@ -72,6 +84,44 @@ export default function WorkflowToolbar({
       {/* Unsaved dot */}
       {hasUnsavedChanges && (
         <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Unsaved changes" />
+      )}
+
+      {/* Gate node drag */}
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("application/gate-node", "Approval");
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+                   text-slate-300 hover:text-slate-100 hover:bg-slate-700
+                   rounded-lg transition-colors cursor-grab active:cursor-grabbing
+                   border border-dashed border-slate-600"
+        title="Drag to add an Approval Gate"
+      >
+        <ShieldCheck size={14} />
+        Gate
+      </div>
+
+      {/* Blob container name */}
+      {onBlobContainerNameChange && (
+        <div className="flex items-center gap-1.5">
+          {blobContainerName ? (
+            <span className="text-[10px] text-blue-400" title="Watching blob container">
+              📦
+            </span>
+          ) : null}
+          <input
+            type="text"
+            value={blobContainerName || ""}
+            onChange={(e) => onBlobContainerNameChange(e.target.value)}
+            placeholder="Blob container"
+            className="text-[11px] text-slate-300 bg-transparent border border-slate-600
+                       hover:border-slate-500 focus:border-blue-500 rounded px-2 py-1
+                       outline-none transition-colors w-28"
+            title="Azure Blob Storage container name for plan ingestion"
+          />
+        </div>
       )}
 
       <div className="flex-1" />
@@ -167,11 +217,15 @@ export default function WorkflowToolbar({
       {/* Execute */}
       <button
         onClick={onExecute}
-        disabled={isExecuting || !currentWorkflowId}
-        className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium
+        disabled={!currentWorkflowId}
+        className="relative flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium
                    bg-green-600 hover:bg-green-500 disabled:bg-green-800
                    disabled:opacity-50 text-white rounded-lg transition-colors cursor-pointer"
-        title="Execute Workflow"
+        title={
+          runningExecutionCount
+            ? `Start a new execution (${runningExecutionCount} currently running)`
+            : "Execute Workflow"
+        }
       >
         {isExecuting ? (
           <Loader2 size={15} className="animate-spin" />
@@ -179,7 +233,35 @@ export default function WorkflowToolbar({
           <Play size={15} />
         )}
         Execute
+        {(runningExecutionCount ?? 0) > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center
+                           bg-blue-500 text-white text-[10px] font-bold rounded-full px-1">
+            {runningExecutionCount}
+          </span>
+        )}
       </button>
+
+      {/* User info + logout */}
+      {userName && (
+        <>
+          <div className="w-px h-6 bg-slate-600 mx-1" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 truncate max-w-[120px]" title={userName}>
+              {userName}
+            </span>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-400
+                           hover:text-slate-200 hover:bg-slate-700 rounded transition-colors cursor-pointer"
+                title="Sign out"
+              >
+                <LogOut size={13} />
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
