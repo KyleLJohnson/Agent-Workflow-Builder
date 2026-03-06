@@ -13,6 +13,7 @@ public class WorkflowHub : Hub
     private readonly ExecutionSessionManager _sessionManager;
     private readonly ILogger<WorkflowHub> _logger;
     private readonly IConfiguration _configuration;
+    private readonly IHubContext<WorkflowHub> _hubContext;
     private readonly int _maxConcurrentPerUser;
 
     private static readonly ConcurrentDictionary<string, CancellationTokenSource> ActiveExecutions = new();
@@ -23,17 +24,20 @@ public class WorkflowHub : Hub
         IWorkflowStore workflowStore,
         ExecutionSessionManager sessionManager,
         ILogger<WorkflowHub> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHubContext<WorkflowHub> hubContext)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(workflowStore);
         ArgumentNullException.ThrowIfNull(sessionManager);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(hubContext);
         _engine = engine;
         _workflowStore = workflowStore;
         _sessionManager = sessionManager;
         _logger = logger;
         _configuration = configuration;
+        _hubContext = hubContext;
         _maxConcurrentPerUser = int.TryParse(
             configuration["Workflow:MaxConcurrentExecutionsPerUser"], out int val) ? val : 5;
     }
@@ -71,12 +75,17 @@ public class WorkflowHub : Hub
             return string.Empty;
         }
 
+        // Capture connection ID and use IHubContext for the background task,
+        // because the Hub instance is disposed after this method returns.
+        string connectionId = Context.ConnectionId;
+        IClientProxy caller = _hubContext.Clients.Client(connectionId);
+
         // Fire and forget the execution, sending events as they arrive
         _ = Task.Run(async () =>
         {
             try
             {
-                await Clients.Caller.SendAsync("ExecutionStarted", workflowId, ct);
+                await caller.SendAsync("ExecutionStarted", workflowId, ct);
 
                 bool resolvedAutoApprove = autoApproveGates ?? workflow.AutoApproveGates;
                 bool hasOutput = false;
@@ -85,47 +94,47 @@ public class WorkflowHub : Hub
                     switch (evt.EventType)
                     {
                         case ExecutionEventType.AgentStepStarted:
-                            await Clients.Caller.SendAsync("AgentStepStarted", evt, ct);
+                            await caller.SendAsync("AgentStepStarted", evt, ct);
                             break;
                         case ExecutionEventType.AgentStepCompleted:
-                            await Clients.Caller.SendAsync("AgentStepCompleted", evt, ct);
+                            await caller.SendAsync("AgentStepCompleted", evt, ct);
                             if (!string.IsNullOrWhiteSpace(evt.Data))
                                 hasOutput = true;
                             break;
                         case ExecutionEventType.WorkflowOutput:
-                            await Clients.Caller.SendAsync("WorkflowOutput", evt, ct);
+                            await caller.SendAsync("WorkflowOutput", evt, ct);
                             if (!string.IsNullOrWhiteSpace(evt.Data))
                                 hasOutput = true;
                             break;
                         case ExecutionEventType.Error:
-                            await Clients.Caller.SendAsync("Error", evt.Data, ct);
+                            await caller.SendAsync("Error", evt.Data, ct);
                             break;
                         case ExecutionEventType.ClarificationNeeded:
-                            await Clients.Caller.SendAsync("ClarificationNeeded", evt, ct);
+                            await caller.SendAsync("ClarificationNeeded", evt, ct);
                             break;
                         case ExecutionEventType.GateAwaitingApproval:
-                            await Clients.Caller.SendAsync("GateAwaitingApproval", evt, ct);
+                            await caller.SendAsync("GateAwaitingApproval", evt, ct);
                             break;
                         case ExecutionEventType.GateApproved:
-                            await Clients.Caller.SendAsync("GateApproved", evt, ct);
+                            await caller.SendAsync("GateApproved", evt, ct);
                             break;
                         case ExecutionEventType.GateRejected:
-                            await Clients.Caller.SendAsync("GateRejected", evt, ct);
+                            await caller.SendAsync("GateRejected", evt, ct);
                             break;
                         case ExecutionEventType.LoopIterationStarted:
-                            await Clients.Caller.SendAsync("LoopIterationStarted", evt, ct);
+                            await caller.SendAsync("LoopIterationStarted", evt, ct);
                             break;
                         case ExecutionEventType.LoopIterationCompleted:
-                            await Clients.Caller.SendAsync("LoopIterationCompleted", evt, ct);
+                            await caller.SendAsync("LoopIterationCompleted", evt, ct);
                             break;
                         case ExecutionEventType.PlanGenerated:
-                            await Clients.Caller.SendAsync("PlanGenerated", evt, ct);
+                            await caller.SendAsync("PlanGenerated", evt, ct);
                             break;
                         case ExecutionEventType.PlanTriggered:
-                            await Clients.Caller.SendAsync("PlanTriggered", evt, ct);
+                            await caller.SendAsync("PlanTriggered", evt, ct);
                             break;
                         case ExecutionEventType.GateAutoApproved:
-                            await Clients.Caller.SendAsync("GateAutoApproved", evt, ct);
+                            await caller.SendAsync("GateAutoApproved", evt, ct);
                             break;
                     }
                 }
@@ -138,17 +147,17 @@ public class WorkflowHub : Hub
                     _logger.LogWarning(
                         "Workflow {WorkflowId} completed but produced no output. CopilotSdk Provider={Provider}, BaseUrl={BaseUrl}, Model={Model}",
                         workflowId, provider, baseUrl, model);
-                    await Clients.Caller.SendAsync("WorkflowOutput", new WorkflowExecutionEvent
+                    await caller.SendAsync("WorkflowOutput", new WorkflowExecutionEvent
                     {
                         EventType = ExecutionEventType.WorkflowOutput,
                         ExecutionId = executionId,
-                        Data = $"⚠️ The workflow completed but no AI output was generated. " +
-                               $"Please verify your Copilot SDK configuration in appsettings.json — " +
+                        Data = $"\u26a0\ufe0f The workflow completed but no AI output was generated. " +
+                               $"Please verify your Copilot SDK configuration in appsettings.json \u2014 " +
                                $"Provider: {provider}, Base URL: {baseUrl}, Model: {model}"
                     }, CancellationToken.None);
                 }
 
-                await Clients.Caller.SendAsync("ExecutionCompleted", workflowId, CancellationToken.None);
+                await caller.SendAsync("ExecutionCompleted", workflowId, CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
@@ -157,7 +166,7 @@ public class WorkflowHub : Hub
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Workflow execution failed for {WorkflowId}", workflowId);
-                await Clients.Caller.SendAsync("Error", ex.Message, CancellationToken.None);
+                await caller.SendAsync("Error", ex.Message, CancellationToken.None);
             }
             finally
             {
