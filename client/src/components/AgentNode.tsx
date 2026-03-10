@@ -21,11 +21,12 @@ function AgentNodeComponent({ data, selected }: NodeProps) {
         relative min-w-[180px] max-w-[220px] rounded-xl px-4 py-3
         border-2 transition-all duration-200 shadow-lg
         ${
-          selected
-            ? "border-blue-500 shadow-blue-500/20"
-            : "border-slate-600 hover:border-slate-500"
+          isExecuting
+            ? "border-green-500 ring-2 ring-green-400/40 animate-pulse-border"
+            : selected
+              ? "border-blue-500 shadow-blue-500/20"
+              : "border-slate-600 hover:border-slate-500"
         }
-        ${isExecuting ? "animate-pulse-border" : ""}
         bg-slate-800
       `}
     >

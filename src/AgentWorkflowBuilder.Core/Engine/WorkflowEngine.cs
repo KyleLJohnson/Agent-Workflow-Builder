@@ -44,13 +44,14 @@ public class WorkflowEngine : IWorkflowEngine
         WorkflowDefinition workflow,
         string inputMessage,
         bool autoApproveGates = false,
+        string? executionId = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentException.ThrowIfNullOrWhiteSpace(inputMessage);
 
         string lastOutput = string.Empty;
-        await foreach (WorkflowExecutionEvent evt in ExecuteStreamingAsync(workflow, inputMessage, autoApproveGates, ct))
+        await foreach (WorkflowExecutionEvent evt in ExecuteStreamingAsync(workflow, inputMessage, autoApproveGates, executionId, ct))
         {
             if (evt.EventType == ExecutionEventType.WorkflowOutput && !string.IsNullOrWhiteSpace(evt.Data))
             {
@@ -74,12 +75,13 @@ public class WorkflowEngine : IWorkflowEngine
         WorkflowDefinition workflow,
         string inputMessage,
         bool autoApproveGates = false,
+        string? executionId = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentException.ThrowIfNullOrWhiteSpace(inputMessage);
 
-        string executionId = Guid.NewGuid().ToString();
+        executionId ??= Guid.NewGuid().ToString();
         ExecutionSession session = _sessionManager.CreateSession(executionId);
         session.WorkflowId = workflow.Id;
 
@@ -265,6 +267,9 @@ public class WorkflowEngine : IWorkflowEngine
                 onUserInput: onUserInput,
                 ct: ct);
 
+            // Cancel SendAndWaitAsync if the SDK reports a session error
+            using CancellationTokenSource errorCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
             session.On(evt =>
             {
                 if (evt is AssistantMessageEvent msg)
@@ -281,13 +286,23 @@ public class WorkflowEngine : IWorkflowEngine
                         ExecutorName = agentDef.Name,
                         Data = $"Agent '{agentDef.Name}' error: {error.Data?.Message}"
                     });
+                    // Abort the pending SendAndWaitAsync so it doesn't hang
+                    errorCts.Cancel();
                 }
             });
 
-            AssistantMessageEvent? response = await session.SendAndWaitAsync(
-                new MessageOptions { Prompt = input });
+            try
+            {
+                AssistantMessageEvent? response = await session.SendAndWaitAsync(
+                    new MessageOptions { Prompt = input }).WaitAsync(errorCts.Token);
 
-            finalOutput ??= response?.Data?.Content;
+                finalOutput ??= response?.Data?.Content;
+            }
+            catch (OperationCanceledException) when (errorCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                // SessionErrorEvent fired — error already written to channel
+            }
+
             channel.Writer.Complete();
         }
         catch (OperationCanceledException)
@@ -317,6 +332,61 @@ public class WorkflowEngine : IWorkflowEngine
         {
             yield return errorEvent;
             yield break;
+        }
+
+        // When the agent's output appears to be asking the user a question rather than
+        // producing a substantive result, pause for a user answer and re-run the agent.
+        if (agentDef.AllowClarification
+            && !string.IsNullOrWhiteSpace(finalOutput)
+            && LooksLikeQuestion(finalOutput))
+        {
+            yield return new WorkflowExecutionEvent
+            {
+                EventType = ExecutionEventType.ClarificationNeeded,
+                ExecutionId = executionId,
+                NodeId = node.NodeId,
+                ExecutorName = agentDef.Name,
+                Question = finalOutput,
+                Data = finalOutput
+            };
+
+            string? clarificationAnswer = null;
+            bool clarificationTimedOut = false;
+            try
+            {
+                clarificationAnswer = await _sessionManager.WaitForClarificationAsync(executionId, ct);
+            }
+            catch (TimeoutException)
+            {
+                clarificationTimedOut = true;
+            }
+
+            if (clarificationTimedOut)
+            {
+                yield return new WorkflowExecutionEvent
+                {
+                    EventType = ExecutionEventType.Error,
+                    ExecutionId = executionId,
+                    NodeId = node.NodeId,
+                    ExecutorName = agentDef.Name,
+                    Data = "Clarification timed out — continuing with the agent's original output."
+                };
+            }
+            else if (!string.IsNullOrWhiteSpace(clarificationAnswer))
+            {
+                // Combine original input, agent's question, and user's answer
+                // so the agent retains full context on the follow-up.
+                string combinedInput = $"{input}\n\nAgent asked: {finalOutput}\nUser answered: {clarificationAnswer}";
+
+                // Re-run the agent with full context
+                await foreach (WorkflowExecutionEvent followUp in RunAgentNodeAsync(
+                    node, agentDef, combinedInput, executionId, plan, ct))
+                {
+                    yield return followUp;
+                }
+
+                yield break;
+            }
         }
 
         // Check for planner output
@@ -645,6 +715,30 @@ public class WorkflowEngine : IWorkflowEngine
     // ──────────────────────────────────────────────────────────
     // Plan parsing
     // ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Detects whether agent output is asking the user for more information
+    /// rather than providing a substantive answer.
+    /// </summary>
+    private static bool LooksLikeQuestion(string output)
+    {
+        string trimmed = output.TrimEnd();
+
+        // Ends with a question mark — most reliable signal
+        if (trimmed.EndsWith('?'))
+            return true;
+
+        // Check the last meaningful sentence/line for request patterns
+        string lastLine = trimmed.Split('\n')[^1].Trim();
+        if (QuestionPatternRegex.IsMatch(lastLine))
+            return true;
+
+        return false;
+    }
+
+    private static readonly Regex QuestionPatternRegex = new(
+        @"(?i)^(please\s+(provide|specify|clarify|share|describe|tell|let\s+me\s+know)|could\s+you|can\s+you|would\s+you|what\s+(would|do|is|are|kind|type)|do\s+you\s+(want|need|prefer)|let\s+me\s+know|i\s+need\s+(more|additional)\s+(info|information|details|context))",
+        RegexOptions.Compiled);
 
     private static readonly Regex PlanBlockRegex = new(
         @"<<<PLAN>>>(.*?)<<<END_PLAN>>>",

@@ -1,0 +1,15 @@
+{
+  "id": "ed773ed8-231d-4870-9b07-b1d3d86d94fa",
+  "workflowId": "284eee8a-0551-4422-ad60-e48c8aef25d7",
+  "triggerType": "manual",
+  "blobName": null,
+  "status": "Paused",
+  "currentNodeId": null,
+  "agentOutputs": {},
+  "accumulatedContext": null,
+  "pauseType": "Gate",
+  "pauseDetails": null,
+  "events": [],
+  "startedAt": "2026-03-10T18:01:55.0690222Z",
+  "completedAt": null
+}

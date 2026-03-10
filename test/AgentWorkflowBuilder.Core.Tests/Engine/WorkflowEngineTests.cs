@@ -26,7 +26,8 @@ public class WorkflowEngineTests
             })
             .Build();
 
-        ExecutionSessionManager sessionManager = new(config, _executionStore);
+        ExecutionSessionManager sessionManager = new(config, _executionStore,
+            Substitute.For<ILogger<ExecutionSessionManager>>());
 
         return new WorkflowEngine(
             _agentRegistry,

@@ -39,9 +39,9 @@ public class CosmosWorkflowStore : IWorkflowStore
         Container container = await GetContainerAsync(ct);
 
         QueryDefinition query = userId is not null
-            ? new QueryDefinition("SELECT * FROM c WHERE c.userId = @userId ORDER BY c.updatedAt DESC")
+            ? new QueryDefinition(CosmosQueries.WorkflowsByUser)
                 .WithParameter("@userId", userId)
-            : new QueryDefinition("SELECT * FROM c ORDER BY c.updatedAt DESC");
+            : new QueryDefinition(CosmosQueries.AllWorkflows);
 
         QueryRequestOptions? options = userId is not null
             ? new QueryRequestOptions { PartitionKey = new PartitionKey(userId) }
@@ -65,7 +65,7 @@ public class CosmosWorkflowStore : IWorkflowStore
         Container container = await GetContainerAsync(ct);
 
         // Cross-partition query since we may not know the userId
-        QueryDefinition query = new QueryDefinition("SELECT * FROM c WHERE c.id = @id")
+        QueryDefinition query = new QueryDefinition(CosmosQueries.WorkflowById)
             .WithParameter("@id", id);
 
         using FeedIterator<WorkflowDefinition> iterator = container.GetItemQueryIterator<WorkflowDefinition>(query);

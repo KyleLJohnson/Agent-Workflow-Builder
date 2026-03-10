@@ -6,8 +6,8 @@
       "nodeId": "node_1772154690101_0",
       "agentId": "eaf77789-2d8d-4238-806f-7cf5d7228a1b",
       "label": "Developer",
-      "positionX": -208,
-      "positionY": 272,
+      "positionX": -352,
+      "positionY": 240,
       "nodeType": "agent",
       "gateConfig": null,
       "configOverrides": null
@@ -16,24 +16,45 @@
       "nodeId": "node_1772154692134_1",
       "agentId": "builtin-code-reviewer",
       "label": "Code Reviewer",
-      "positionX": 208,
-      "positionY": 272,
+      "positionX": 128,
+      "positionY": 240,
       "nodeType": "agent",
       "gateConfig": null,
+      "configOverrides": null
+    },
+    {
+      "nodeId": "node_1772821243774_1",
+      "agentId": "",
+      "label": "Approval Gate",
+      "positionX": -64,
+      "positionY": 256,
+      "nodeType": "gate",
+      "gateConfig": {
+        "gateType": "Approval",
+        "instructions": null,
+        "sendBackTargetNodeId": null
+      },
       "configOverrides": null
     }
   ],
   "edges": [
     {
-      "id": "xy-edge__node_1772154690101_0-node_1772154692134_1",
-      "sourceNodeId": "node_1772154690101_0",
+      "id": "xy-edge__node_1772821243774_1-node_1772154692134_1",
+      "sourceNodeId": "node_1772821243774_1",
       "targetNodeId": "node_1772154692134_1",
+      "isBackEdge": false,
+      "maxIterations": null
+    },
+    {
+      "id": "xy-edge__node_1772154690101_0-node_1772821243774_1",
+      "sourceNodeId": "node_1772154690101_0",
+      "targetNodeId": "node_1772821243774_1",
       "isBackEdge": false,
       "maxIterations": null
     }
   ],
-  "createdAt": "2026-03-06T04:06:15.0333553Z",
-  "updatedAt": "2026-03-06T04:06:15.0373555Z",
+  "createdAt": "2026-03-10T22:37:19.9201702Z",
+  "updatedAt": "2026-03-10T22:37:19.9266739Z",
   "userId": null,
   "blobContainerName": null,
   "autoApproveGates": false

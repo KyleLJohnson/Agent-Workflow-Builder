@@ -18,6 +18,7 @@ Before making changes:
 ### Code Design Rules
 
 - **Never use `var`** — always use explicit types for all variable declarations, including `out` parameters and `using` statements.
+- **No inline SQL/query strings** — store all raw SQL or Cosmos DB query strings as named constants in a dedicated static class (e.g., `CosmosQueries`). Never embed query strings directly in method bodies.
 - DON'T add interfaces/abstractions unless used for external dependencies or testing.
 - Don't wrap existing abstractions.
 - Don't default to `public`. Least-exposure rule: `private` > `internal` > `protected` > `public`

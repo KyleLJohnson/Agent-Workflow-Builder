@@ -1,0 +1,17 @@
+{
+  "id": "2b76bda0-4e44-4e8b-835d-00a91c40a9f1",
+  "workflowId": "284eee8a-0551-4422-ad60-e48c8aef25d7",
+  "triggerType": "manual",
+  "blobName": null,
+  "status": "Paused",
+  "currentNodeId": "node_1772154690101_0",
+  "agentOutputs": {
+    "node_1772154690101_0": "Hello! How can I assist you today?"
+  },
+  "accumulatedContext": "Hello! How can I assist you today?",
+  "pauseType": "Gate",
+  "pauseDetails": null,
+  "events": [],
+  "startedAt": "2026-03-08T19:59:53.7081844Z",
+  "completedAt": null
+}

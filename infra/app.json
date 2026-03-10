@@ -1,0 +1,169 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.40.2.10011",
+      "templateHash": "940040391204012038"
+    }
+  },
+  "parameters": {
+    "webAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the existing Web App to configure."
+      }
+    },
+    "cosmosConnectionString": {
+      "type": "string",
+      "metadata": {
+        "description": "Cosmos DB connection string."
+      }
+    },
+    "cosmosDedicatedGatewayEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Cosmos DB Dedicated Gateway endpoint (empty to disable integrated cache)."
+      }
+    },
+    "serviceBusConnectionString": {
+      "type": "string",
+      "metadata": {
+        "description": "Service Bus connection string."
+      }
+    },
+    "signalRConnectionString": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure SignalR Service connection string."
+      }
+    },
+    "openAiEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure OpenAI endpoint URL."
+      }
+    },
+    "openAiDeploymentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure OpenAI deployed model name."
+      }
+    },
+    "openAiApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure OpenAI API key."
+      }
+    },
+    "storageConnectionString": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account connection string for blob plan polling."
+      }
+    },
+    "blobPlanPollingEnabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable blob plan polling."
+      }
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "metadata": {
+        "description": "Application Insights connection string."
+      }
+    },
+    "entraIdTenantId": {
+      "type": "string",
+      "defaultValue": "<tenant-id>",
+      "metadata": {
+        "description": "Azure AD tenant ID. Leave as placeholder to disable auth."
+      }
+    },
+    "entraIdClientId": {
+      "type": "string",
+      "defaultValue": "<client-id>",
+      "metadata": {
+        "description": "Azure AD client ID."
+      }
+    },
+    "entraIdAudience": {
+      "type": "string",
+      "defaultValue": "api://<client-id>",
+      "metadata": {
+        "description": "Azure AD audience."
+      }
+    },
+    "clarificationTimeoutMinutes": {
+      "type": "int",
+      "defaultValue": 10,
+      "metadata": {
+        "description": "Clarification timeout in minutes."
+      }
+    },
+    "maxLoopIterations": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "Maximum loop iterations per workflow step."
+      }
+    },
+    "maxConcurrentExecutionsPerUser": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "Maximum concurrent executions per user."
+      }
+    },
+    "signalingPollingIntervalMs": {
+      "type": "int",
+      "defaultValue": 2000,
+      "metadata": {
+        "description": "Signaling polling interval in milliseconds."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2024-04-01",
+      "name": "[format('{0}/{1}', parameters('webAppName'), 'appsettings')]",
+      "properties": {
+        "CosmosDb__ConnectionString": "[parameters('cosmosConnectionString')]",
+        "CosmosDb__DatabaseName": "AgentWorkflowBuilder",
+        "CosmosDb__WorkflowContainerName": "workflows",
+        "CosmosDb__ExecutionContainerName": "executions",
+        "CosmosDb__SessionContainerName": "sessions",
+        "CosmosDb__CounterContainerName": "counters",
+        "CosmosDb__LeaseContainerName": "session-leases",
+        "CosmosDb__DedicatedGatewayEndpoint": "[parameters('cosmosDedicatedGatewayEndpoint')]",
+        "ServiceBus__ConnectionString": "[parameters('serviceBusConnectionString')]",
+        "ServiceBus__ExecutionQueueName": "workflow-executions",
+        "ServiceBus__CancellationQueueName": "execution-cancellations",
+        "Azure__SignalR__ConnectionString": "[parameters('signalRConnectionString')]",
+        "CopilotSdk__Provider__Type": "azure",
+        "CopilotSdk__Provider__BaseUrl": "[parameters('openAiEndpoint')]",
+        "CopilotSdk__Provider__ApiKey": "[parameters('openAiApiKey')]",
+        "CopilotSdk__Provider__AzureApiVersion": "2024-10-21",
+        "CopilotSdk__DefaultModel": "[parameters('openAiDeploymentName')]",
+        "AzureAd__Instance": "https://login.microsoftonline.com/",
+        "AzureAd__TenantId": "[parameters('entraIdTenantId')]",
+        "AzureAd__ClientId": "[parameters('entraIdClientId')]",
+        "AzureAd__Audience": "[parameters('entraIdAudience')]",
+        "AzureBlobPlans__ConnectionString": "[parameters('storageConnectionString')]",
+        "AzureBlobPlans__PollingIntervalSeconds": "30",
+        "AzureBlobPlans__Enabled": "[string(parameters('blobPlanPollingEnabled'))]",
+        "Workflow__ClarificationTimeoutMinutes": "[string(parameters('clarificationTimeoutMinutes'))]",
+        "Workflow__MaxLoopIterations": "[string(parameters('maxLoopIterations'))]",
+        "Workflow__MaxConcurrentExecutionsPerUser": "[string(parameters('maxConcurrentExecutionsPerUser'))]",
+        "Workflow__SignalingPollingIntervalMs": "[string(parameters('signalingPollingIntervalMs'))]",
+        "Data__BasePath": "/home/data",
+        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[parameters('appInsightsConnectionString')]"
+      }
+    }
+  ]
+}

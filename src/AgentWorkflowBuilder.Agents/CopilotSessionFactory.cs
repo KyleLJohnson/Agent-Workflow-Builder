@@ -43,7 +43,7 @@ public class CopilotSessionFactory : ICopilotSessionFactory
         ArgumentNullException.ThrowIfNull(definition);
 
         string model = definition.ModelOverride ?? _providerFactory.DefaultModel;
-        ProviderConfig provider = _providerFactory.CreateProviderConfig();
+        ProviderConfig provider = await _providerFactory.CreateProviderConfigAsync(ct);
 
         SessionConfig config = new()
         {
@@ -54,7 +54,8 @@ public class CopilotSessionFactory : ICopilotSessionFactory
                 Content = definition.SystemInstructions ?? string.Empty,
                 Mode = SystemMessageMode.Replace
             },
-            Streaming = true
+            Streaming = true,
+            OnPermissionRequest = PermissionHandler.ApproveAll
         };
 
         // Map MCP servers from agent definition
@@ -76,22 +77,9 @@ public class CopilotSessionFactory : ICopilotSessionFactory
         // Subscribe to streaming delta events if caller wants them
         if (onEvent is not null)
         {
-            session.On(evt =>
-            {
-                if (evt is AssistantMessageDeltaEvent delta)
-                {
-                    string? chunk = delta.Data?.DeltaContent;
-                    if (!string.IsNullOrEmpty(chunk))
-                    {
-                        onEvent(new WorkflowExecutionEvent
-                        {
-                            EventType = ExecutionEventType.WorkflowOutput,
-                            ExecutorName = definition.Name,
-                            Data = chunk
-                        });
-                    }
-                }
-            });
+            // Note: streaming deltas are intentionally not forwarded to onEvent.
+            // The final complete output is emitted by RunAgentNodeAsync as a single
+            // WorkflowOutput event, avoiding duplicate per-token output boxes in the UI.
         }
 
         _logger.LogDebug("Created Copilot session for agent '{AgentName}' with model '{Model}'",

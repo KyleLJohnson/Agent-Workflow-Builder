@@ -28,6 +28,7 @@ interface WorkflowContextValue {
   handleNewWorkflow: () => void;
   handleSaveWorkflow: () => Promise<void>;
   handleDeleteWorkflow: () => Promise<void>;
+  deleteWorkflowById: (id: string) => Promise<void>;
   loadWorkflows: () => Promise<void>;
 }
 
@@ -94,7 +95,16 @@ export function WorkflowProvider({
   );
 
   const handleNewWorkflow = useCallback(() => {
-    setCurrentWorkflow(null);
+    const now = new Date().toISOString();
+    setCurrentWorkflow({
+      id: "",
+      name: "Untitled Workflow",
+      description: "",
+      nodes: [],
+      edges: [],
+      createdAt: now,
+      updatedAt: now,
+    });
     setWorkflowName("Untitled Workflow");
     setAutoApproveGates(false);
     setNodes([]);
@@ -113,7 +123,7 @@ export function WorkflowProvider({
         autoApproveGates,
       };
 
-      if (currentWorkflow) {
+      if (currentWorkflow?.id) {
         const updated = await api.updateWorkflow(currentWorkflow.id, payload);
         setCurrentWorkflow(updated);
       } else {
@@ -130,7 +140,7 @@ export function WorkflowProvider({
   }, [workflowName, nodes, edges, autoApproveGates, currentWorkflow, loadWorkflows]);
 
   const handleDeleteWorkflow = useCallback(async () => {
-    if (!currentWorkflow) return;
+    if (!currentWorkflow?.id) return;
     if (!confirm("Delete this workflow?")) return;
     try {
       await api.deleteWorkflow(currentWorkflow.id);
@@ -140,6 +150,16 @@ export function WorkflowProvider({
       console.error("Failed to delete workflow:", err);
     }
   }, [currentWorkflow, handleNewWorkflow, loadWorkflows]);
+
+  const deleteWorkflowById = useCallback(async (id: string) => {
+    if (!confirm("Delete this workflow?")) return;
+    try {
+      await api.deleteWorkflow(id);
+      await loadWorkflows();
+    } catch (err) {
+      console.error("Failed to delete workflow:", err);
+    }
+  }, [loadWorkflows]);
 
   return (
     <WorkflowContext.Provider
@@ -162,6 +182,7 @@ export function WorkflowProvider({
         handleNewWorkflow,
         handleSaveWorkflow,
         handleDeleteWorkflow,
+        deleteWorkflowById,
         loadWorkflows,
       }}
     >

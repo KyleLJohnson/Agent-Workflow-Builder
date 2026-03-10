@@ -1,0 +1,18 @@
+{
+  "id": "45f1a196-58ae-4c29-914a-6650fa722c8c",
+  "workflowId": "284eee8a-0551-4422-ad60-e48c8aef25d7",
+  "triggerType": "manual",
+  "blobName": null,
+  "status": "Completed",
+  "currentNodeId": null,
+  "agentOutputs": {
+    "node_1772154690101_0": "Hello! How can I assist you today?",
+    "node_1772154692134_1": "Hello! How can I assist you today? If you have any code you\u0027d like me to review or any questions about software development, feel free to share!"
+  },
+  "accumulatedContext": "Hello! How can I assist you today? If you have any code you\u0027d like me to review or any questions about software development, feel free to share!",
+  "pauseType": "None",
+  "pauseDetails": null,
+  "events": [],
+  "startedAt": "2026-03-10T18:20:02.3360929Z",
+  "completedAt": "2026-03-10T18:30:12.7769475Z"
+}

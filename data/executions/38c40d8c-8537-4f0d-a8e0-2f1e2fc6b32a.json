@@ -1,0 +1,17 @@
+{
+  "id": "38c40d8c-8537-4f0d-a8e0-2f1e2fc6b32a",
+  "workflowId": "284eee8a-0551-4422-ad60-e48c8aef25d7",
+  "triggerType": "manual",
+  "blobName": null,
+  "status": "Paused",
+  "currentNodeId": "node_1772154690101_0",
+  "agentOutputs": {
+    "node_1772154690101_0": "Here is a simple example of code to add two numbers in Python:\n\n\u0060\u0060\u0060python\ndef add_two_numbers(a, b):\n    return a \u002B b\n\n# Example usage\nnum1 = 5\nnum2 = 7\nresult = add_two_numbers(num1, num2)\nprint(\u0022The sum is:\u0022, result)\n\u0060\u0060\u0060\n\nWould you like the code in a different programming language?"
+  },
+  "accumulatedContext": "Here is a simple example of code to add two numbers in Python:\n\n\u0060\u0060\u0060python\ndef add_two_numbers(a, b):\n    return a \u002B b\n\n# Example usage\nnum1 = 5\nnum2 = 7\nresult = add_two_numbers(num1, num2)\nprint(\u0022The sum is:\u0022, result)\n\u0060\u0060\u0060\n\nWould you like the code in a different programming language?",
+  "pauseType": "Gate",
+  "pauseDetails": null,
+  "events": [],
+  "startedAt": "2026-03-10T21:49:36.8946826Z",
+  "completedAt": null
+}

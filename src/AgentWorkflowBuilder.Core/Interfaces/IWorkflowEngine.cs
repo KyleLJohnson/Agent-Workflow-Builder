@@ -8,11 +8,13 @@ public interface IWorkflowEngine
         WorkflowDefinition workflow,
         string inputMessage,
         bool autoApproveGates = false,
+        string? executionId = null,
         CancellationToken ct = default);
 
     IAsyncEnumerable<WorkflowExecutionEvent> ExecuteStreamingAsync(
         WorkflowDefinition workflow,
         string inputMessage,
         bool autoApproveGates = false,
+        string? executionId = null,
         CancellationToken ct = default);
 }

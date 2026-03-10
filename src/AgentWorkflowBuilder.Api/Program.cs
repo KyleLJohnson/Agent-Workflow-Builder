@@ -6,6 +6,8 @@ using AgentWorkflowBuilder.Core.Engine;
 using AgentWorkflowBuilder.Core.Interfaces;
 using AgentWorkflowBuilder.Core.Models;
 using AgentWorkflowBuilder.Persistence;
+using Azure.Identity;
+using Azure.Messaging.ServiceBus;
 using Azure.Storage.Blobs;
 using GitHub.Copilot.SDK;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,6 +15,10 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Identity.Web;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Load optional local settings file (gitignored, safe for secrets)
+string environment = builder.Environment.EnvironmentName;
+builder.Configuration.AddJsonFile($"appsettings.{environment}.local.json", optional: true, reloadOnChange: true);
 
 // --- Configuration ---
 var configuredDataPath = builder.Configuration["Data:BasePath"];
@@ -70,16 +76,36 @@ builder.Services.AddSingleton<IAgentRegistry>(new JsonAgentRegistry(dataBasePath
 
 // Workflow store: use Cosmos DB when configured, otherwise JSON files
 string cosmosConnectionString = builder.Configuration["CosmosDb:ConnectionString"] ?? string.Empty;
-bool cosmosEnabled = !string.IsNullOrWhiteSpace(cosmosConnectionString);
+string cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"] ?? string.Empty;
+bool cosmosEnabled = !string.IsNullOrWhiteSpace(cosmosConnectionString) || !string.IsNullOrWhiteSpace(cosmosEndpoint);
 CosmosClient? cosmosClient = null;
 
 if (cosmosEnabled)
 {
-    cosmosClient = new CosmosClient(cosmosConnectionString);
+    // Support Cosmos DB dedicated gateway (integrated cache) when configured
+    string? dedicatedGatewayEndpoint = builder.Configuration["CosmosDb:DedicatedGatewayEndpoint"];
+    CosmosClientOptions cosmosOptions = new();
+    if (!string.IsNullOrWhiteSpace(dedicatedGatewayEndpoint))
+    {
+        cosmosOptions.ConnectionMode = ConnectionMode.Gateway;
+        cosmosOptions.ApplicationPreferredRegions = null;
+    }
+
+    // Prefer endpoint + Managed Identity over connection string (supports disableLocalAuth)
+    if (!string.IsNullOrWhiteSpace(cosmosEndpoint))
+    {
+        cosmosClient = new CosmosClient(cosmosEndpoint, new DefaultAzureCredential(), cosmosOptions);
+    }
+    else
+    {
+        cosmosClient = new CosmosClient(cosmosConnectionString, cosmosOptions);
+    }
     builder.Services.AddSingleton(cosmosClient);
     string cosmosDbName = builder.Configuration["CosmosDb:DatabaseName"] ?? "AgentWorkflowBuilder";
     string wfContainer = builder.Configuration["CosmosDb:WorkflowContainerName"] ?? "workflows";
     string execContainer = builder.Configuration["CosmosDb:ExecutionContainerName"] ?? "executions";
+    string sessionContainer = builder.Configuration["CosmosDb:SessionContainerName"] ?? "sessions";
+    string counterContainer = builder.Configuration["CosmosDb:CounterContainerName"] ?? "counters";
 
     builder.Services.AddSingleton<IWorkflowStore>(sp =>
         new CosmosWorkflowStore(cosmosClient, cosmosDbName, wfContainer,
@@ -87,11 +113,23 @@ if (cosmosEnabled)
     builder.Services.AddSingleton<IExecutionStore>(sp =>
         new CosmosExecutionStore(cosmosClient, cosmosDbName, execContainer,
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<CosmosExecutionStore>()));
+
+    // Session signaling store (Cosmos DB change feed for gate/clarification)
+    CosmosSessionStore sessionStore = new(cosmosClient, cosmosDbName, sessionContainer,
+        LoggerFactory.Create(b => b.AddConsole()).CreateLogger<CosmosSessionStore>());
+    builder.Services.AddSingleton(sessionStore);
+    builder.Services.AddSingleton<ISessionSignalingStore>(sessionStore);
+
+    // Distributed concurrency counter
+    builder.Services.AddSingleton<IConcurrencyCounter>(sp =>
+        new CosmosConcurrencyCounter(cosmosClient, cosmosDbName, counterContainer,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<CosmosConcurrencyCounter>()));
 }
 else
 {
     builder.Services.AddSingleton<IWorkflowStore>(new JsonWorkflowStore(dataBasePath));
     builder.Services.AddSingleton<IExecutionStore>(new JsonExecutionStore(dataBasePath));
+    builder.Services.AddSingleton<IConcurrencyCounter>(new InMemoryConcurrencyCounter());
 }
 
 var mcpManager = new McpClientManager(dataBasePath);
@@ -99,8 +137,34 @@ builder.Services.AddSingleton<IMcpConfigStore>(mcpManager);
 builder.Services.AddSingleton<IMcpClientManager>(mcpManager);
 builder.Services.AddSingleton<ICopilotSessionFactory, CopilotSessionFactory>();
 builder.Services.AddSingleton<ExecutionSessionManager>();
+builder.Services.AddSingleton<CancellationManager>();
 builder.Services.AddSingleton<IWorkflowEngine, WorkflowEngine>();
 builder.Services.AddHostedService<ExecutionRecoveryService>();
+
+// --- Azure Service Bus (execution queue + cancellation) ---
+string serviceBusConnectionString = builder.Configuration["ServiceBus:ConnectionString"] ?? string.Empty;
+bool serviceBusEnabled = !string.IsNullOrWhiteSpace(serviceBusConnectionString);
+
+if (serviceBusEnabled)
+{
+    string executionQueueName = builder.Configuration["ServiceBus:ExecutionQueueName"] ?? "workflow-executions";
+    string cancellationQueueName = builder.Configuration["ServiceBus:CancellationQueueName"] ?? "execution-cancellations";
+
+    ServiceBusClient serviceBusClient = new(serviceBusConnectionString);
+    builder.Services.AddSingleton(serviceBusClient);
+    builder.Services.AddSingleton<IExecutionQueue>(sp =>
+        new ServiceBusExecutionQueue(serviceBusClient, executionQueueName, cancellationQueueName,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<ServiceBusExecutionQueue>()));
+
+    // Background workers: dequeue executions + listen for cancellations
+    builder.Services.AddHostedService<ExecutionWorkerService>();
+}
+
+// --- Change feed listener (distributed session signaling) ---
+if (cosmosEnabled)
+{
+    builder.Services.AddHostedService<ChangeFeedListenerService>();
+}
 
 // --- Blob polling service (optional) ---
 if (string.Equals(builder.Configuration["AzureBlobPlans:Enabled"], "true", StringComparison.OrdinalIgnoreCase))
@@ -116,7 +180,14 @@ builder.Services.AddSignalR(options =>
     // Increase timeouts — AI workflow execution can take 30-60+ seconds
     options.ClientTimeoutInterval = TimeSpan.FromMinutes(5);
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-});
+}).AddJsonProtocol();
+
+// --- Azure SignalR Service (multi-instance support) ---
+string? azureSignalRConnectionString = builder.Configuration["Azure:SignalR:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(azureSignalRConnectionString))
+{
+    builder.Services.AddSignalR().AddAzureSignalR(azureSignalRConnectionString);
+}
 
 builder.Services.AddCors(options =>
 {
@@ -135,6 +206,10 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
+
+// Serve the React SPA from wwwroot
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 if (entraAuthEnabled)
 {
@@ -413,5 +488,8 @@ if (entraAuthEnabled)
 {
     hubEndpoint.RequireAuthorization();
 }
+
+// SPA fallback: serve index.html for non-API, non-hub routes
+app.MapFallbackToFile("index.html");
 
 app.Run();

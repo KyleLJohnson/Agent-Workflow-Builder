@@ -1,4 +1,5 @@
 using AgentWorkflowBuilder.Core.Engine;
+using Azure.Core;
 using Microsoft.Extensions.Configuration;
 
 namespace AgentWorkflowBuilder.Core.Tests.Engine;
@@ -10,8 +11,27 @@ public class CopilotProviderFactoryTests
             .AddInMemoryCollection(values)
             .Build();
 
+    /// <summary>
+    /// Fake token credential that returns a fixed token for testing.
+    /// </summary>
+    private sealed class FakeTokenCredential : TokenCredential
+    {
+        private readonly string _token;
+
+        public FakeTokenCredential(string token = "fake-bearer-token")
+        {
+            _token = token;
+        }
+
+        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
+            => new(_token, DateTimeOffset.UtcNow.AddHours(1));
+
+        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
+            => new(new AccessToken(_token, DateTimeOffset.UtcNow.AddHours(1)));
+    }
+
     [Fact]
-    public void WhenValidConfigThenCreatesProviderConfig()
+    public async Task WhenValidConfigThenCreatesProviderConfig()
     {
         IConfiguration config = BuildConfig(new Dictionary<string, string?>
         {
@@ -22,14 +42,14 @@ public class CopilotProviderFactoryTests
 
         CopilotProviderFactory factory = new(config);
 
-        GitHub.Copilot.SDK.ProviderConfig result = factory.CreateProviderConfig();
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
         Assert.Equal("azure", result.Type);
         Assert.Equal("https://myopenai.azure.com", result.BaseUrl);
         Assert.Equal("test-api-key", result.ApiKey);
     }
 
     [Fact]
-    public void WhenAzureProviderThenSetsAzureApiVersion()
+    public async Task WhenAzureProviderThenSetsAzureApiVersion()
     {
         IConfiguration config = BuildConfig(new Dictionary<string, string?>
         {
@@ -41,13 +61,13 @@ public class CopilotProviderFactoryTests
 
         CopilotProviderFactory factory = new(config);
 
-        GitHub.Copilot.SDK.ProviderConfig result = factory.CreateProviderConfig();
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
         Assert.NotNull(result.Azure);
         Assert.Equal("2025-01-01", result.Azure.ApiVersion);
     }
 
     [Fact]
-    public void WhenNonAzureProviderThenAzureConfigIsNull()
+    public async Task WhenNonAzureProviderThenAzureConfigIsNull()
     {
         IConfiguration config = BuildConfig(new Dictionary<string, string?>
         {
@@ -58,7 +78,7 @@ public class CopilotProviderFactoryTests
 
         CopilotProviderFactory factory = new(config);
 
-        GitHub.Copilot.SDK.ProviderConfig result = factory.CreateProviderConfig();
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
         Assert.Null(result.Azure);
     }
 
@@ -92,7 +112,7 @@ public class CopilotProviderFactoryTests
     }
 
     [Fact]
-    public void WhenProviderTypeNotSetThenDefaultsToAzure()
+    public async Task WhenProviderTypeNotSetThenDefaultsToAzure()
     {
         IConfiguration config = BuildConfig(new Dictionary<string, string?>
         {
@@ -102,7 +122,7 @@ public class CopilotProviderFactoryTests
 
         CopilotProviderFactory factory = new(config);
 
-        GitHub.Copilot.SDK.ProviderConfig result = factory.CreateProviderConfig();
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
         Assert.Equal("azure", result.Type);
         Assert.NotNull(result.Azure);
     }
@@ -119,11 +139,12 @@ public class CopilotProviderFactoryTests
     }
 
     [Fact]
-    public void WhenApiKeyMissingThenThrowsInvalidOperation()
+    public void WhenApiKeyMissingForNonAzureThenThrowsInvalidOperation()
     {
         IConfiguration config = BuildConfig(new Dictionary<string, string?>
         {
-            ["CopilotSdk:Provider:BaseUrl"] = "https://myopenai.azure.com"
+            ["CopilotSdk:Provider:Type"] = "custom",
+            ["CopilotSdk:Provider:BaseUrl"] = "https://custom-llm.example.com"
         });
 
         Assert.Throws<InvalidOperationException>(() => new CopilotProviderFactory(config));
@@ -136,7 +157,7 @@ public class CopilotProviderFactoryTests
     }
 
     [Fact]
-    public void WhenAzureApiVersionNotSetThenDefaultsTo202410()
+    public async Task WhenAzureApiVersionNotSetThenDefaultsTo202410()
     {
         IConfiguration config = BuildConfig(new Dictionary<string, string?>
         {
@@ -147,8 +168,43 @@ public class CopilotProviderFactoryTests
 
         CopilotProviderFactory factory = new(config);
 
-        GitHub.Copilot.SDK.ProviderConfig result = factory.CreateProviderConfig();
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
         Assert.NotNull(result.Azure);
         Assert.Equal("2024-10-21", result.Azure.ApiVersion);
+    }
+
+    [Fact]
+    public async Task WhenAzureWithNoApiKeyThenUsesBearerToken()
+    {
+        IConfiguration config = BuildConfig(new Dictionary<string, string?>
+        {
+            ["CopilotSdk:Provider:Type"] = "azure",
+            ["CopilotSdk:Provider:BaseUrl"] = "https://myopenai.azure.com"
+        });
+
+        CopilotProviderFactory factory = new(config, new FakeTokenCredential("test-bearer-token"));
+
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
+        Assert.Null(result.ApiKey);
+        Assert.Equal("test-bearer-token", result.BearerToken);
+        Assert.Equal("azure", result.Type);
+        Assert.NotNull(result.Azure);
+    }
+
+    [Fact]
+    public async Task WhenAzureWithApiKeyThenUsesApiKeyNotBearer()
+    {
+        IConfiguration config = BuildConfig(new Dictionary<string, string?>
+        {
+            ["CopilotSdk:Provider:Type"] = "azure",
+            ["CopilotSdk:Provider:BaseUrl"] = "https://myopenai.azure.com",
+            ["CopilotSdk:Provider:ApiKey"] = "test-api-key"
+        });
+
+        CopilotProviderFactory factory = new(config);
+
+        GitHub.Copilot.SDK.ProviderConfig result = await factory.CreateProviderConfigAsync();
+        Assert.Equal("test-api-key", result.ApiKey);
+        Assert.Null(result.BearerToken);
     }
 }

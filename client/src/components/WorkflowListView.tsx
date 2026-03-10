@@ -1,16 +1,18 @@
-import { Calendar, Layers, Plus, ArrowRight } from "lucide-react";
+import { Calendar, Layers, Plus, ArrowRight, Trash2 } from "lucide-react";
 import type { WorkflowDefinition } from "@/types";
 
 interface WorkflowListViewProps {
   workflows: WorkflowDefinition[];
   onSelect: (workflow: WorkflowDefinition) => void;
   onCreateNew: () => void;
+  onDelete: (id: string) => void;
 }
 
 export default function WorkflowListView({
   workflows,
   onSelect,
   onCreateNew,
+  onDelete,
 }: WorkflowListViewProps) {
   return (
     <div className="flex-1 flex flex-col items-center justify-start bg-gray-900 p-8 overflow-y-auto">
@@ -58,8 +60,17 @@ export default function WorkflowListView({
                     {new Date(wf.updatedAt ?? wf.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 mt-3 text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                  Open <ArrowRight size={12} />
+                <div className="flex items-center gap-3 mt-3 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="flex items-center gap-1 text-blue-400">
+                    Open <ArrowRight size={12} />
+                  </span>
+                  <span
+                    role="button"
+                    onClick={(e) => { e.stopPropagation(); onDelete(wf.id); }}
+                    className="flex items-center gap-1 text-red-400 hover:text-red-300 cursor-pointer"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </span>
                 </div>
               </button>
             ))}

@@ -1,0 +1,17 @@
+{
+  "id": "a8b97b88-fc25-42d5-a385-27b42e0e3386",
+  "workflowId": "45ab1210-a34d-41cf-bdae-0db0ff41c0b8",
+  "triggerType": "manual",
+  "blobName": null,
+  "status": "Paused",
+  "currentNodeId": "node_1773185782607_0",
+  "agentOutputs": {
+    "node_1773185782607_0": "\u0060\u0060\u0060csharp\nusing System;\n\nclass Program\n{\n    static void Main()\n    {\n        // Declare two numbers\n        int number1 = 5;\n        int number2 = 7;\n\n        // Add the two numbers\n        int sum = number1 \u002B number2;\n\n        // Print the result\n        Console.WriteLine(\u0022The sum of {0} and {1} is {2}.\u0022, number1, number2, sum);\n    }\n}\n\u0060\u0060\u0060\n\nThis C# program declares two integers, adds them, and prints the result to the console. Let me know if you want a version that takes input from the user or any other variation."
+  },
+  "accumulatedContext": "\u0060\u0060\u0060csharp\nusing System;\n\nclass Program\n{\n    static void Main()\n    {\n        // Declare two numbers\n        int number1 = 5;\n        int number2 = 7;\n\n        // Add the two numbers\n        int sum = number1 \u002B number2;\n\n        // Print the result\n        Console.WriteLine(\u0022The sum of {0} and {1} is {2}.\u0022, number1, number2, sum);\n    }\n}\n\u0060\u0060\u0060\n\nThis C# program declares two integers, adds them, and prints the result to the console. Let me know if you want a version that takes input from the user or any other variation.",
+  "pauseType": "Gate",
+  "pauseDetails": null,
+  "events": [],
+  "startedAt": "2026-03-10T23:36:53.7639026Z",
+  "completedAt": null
+}

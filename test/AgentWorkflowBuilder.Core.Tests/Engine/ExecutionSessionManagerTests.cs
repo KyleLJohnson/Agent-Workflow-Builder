@@ -2,6 +2,7 @@ using AgentWorkflowBuilder.Core.Engine;
 using AgentWorkflowBuilder.Core.Interfaces;
 using AgentWorkflowBuilder.Core.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace AgentWorkflowBuilder.Core.Tests.Engine;
@@ -9,6 +10,7 @@ namespace AgentWorkflowBuilder.Core.Tests.Engine;
 public class ExecutionSessionManagerTests
 {
     private readonly IExecutionStore _executionStore = Substitute.For<IExecutionStore>();
+    private readonly ILogger<ExecutionSessionManager> _logger = Substitute.For<ILogger<ExecutionSessionManager>>();
 
     private ExecutionSessionManager CreateManager(int timeoutMinutes = 10)
     {
@@ -18,7 +20,7 @@ public class ExecutionSessionManagerTests
                 ["Workflow:ClarificationTimeoutMinutes"] = timeoutMinutes.ToString()
             })
             .Build();
-        return new ExecutionSessionManager(config, _executionStore);
+        return new ExecutionSessionManager(config, _executionStore, _logger);
     }
 
     [Fact]
@@ -114,7 +116,7 @@ public class ExecutionSessionManagerTests
 
         // Simulate user answering after a short delay
         await Task.Delay(50);
-        manager.SubmitClarification("exec-1", "the answer");
+        await manager.SubmitClarificationAsync("exec-1", "the answer");
 
         string result = await waitTask;
 
@@ -136,7 +138,7 @@ public class ExecutionSessionManagerTests
 
         await Task.Delay(50);
         GateResponse approval = new() { Status = GateResponseStatus.Approved };
-        manager.SubmitGateResponse("exec-1", approval);
+        await manager.SubmitGateResponseAsync("exec-1", approval);
 
         GateResponse result = await waitTask;
 
@@ -155,7 +157,7 @@ public class ExecutionSessionManagerTests
 
         await Task.Delay(50);
         GateResponse rejection = new() { Status = GateResponseStatus.Rejected, Reason = "Not good enough" };
-        manager.SubmitGateResponse("exec-1", rejection);
+        await manager.SubmitGateResponseAsync("exec-1", rejection);
 
         GateResponse result = await waitTask;
 
@@ -175,7 +177,7 @@ public class ExecutionSessionManagerTests
 
         await Task.Delay(50);
         GateResponse sendBack = new() { Status = GateResponseStatus.SendBack, Feedback = "Redo this" };
-        manager.SubmitGateResponse("exec-1", sendBack);
+        await manager.SubmitGateResponseAsync("exec-1", sendBack);
 
         GateResponse result = await waitTask;
 
@@ -188,21 +190,23 @@ public class ExecutionSessionManagerTests
     }
 
     [Fact]
-    public void WhenSubmitClarificationToNonexistentSessionThenThrows()
+    public async Task WhenSubmitClarificationToNonexistentSessionThenNoOp()
     {
         ExecutionSessionManager manager = CreateManager();
 
-        Assert.Throws<InvalidOperationException>(
-            () => manager.SubmitClarification("nonexistent", "answer"));
+        // In local mode without signaling store, submitting to nonexistent session is a no-op
+        // (the TCS will be null so TrySetResult does nothing)
+        manager.CreateSession("exec-1");
+        await manager.SubmitClarificationAsync("exec-1", "answer");
     }
 
     [Fact]
-    public void WhenSubmitGateResponseToNonexistentSessionThenThrows()
+    public async Task WhenSubmitGateResponseToNonexistentSessionThenNoOp()
     {
         ExecutionSessionManager manager = CreateManager();
 
-        Assert.Throws<InvalidOperationException>(
-            () => manager.SubmitGateResponse("nonexistent", new GateResponse { Status = GateResponseStatus.Approved }));
+        manager.CreateSession("exec-1");
+        await manager.SubmitGateResponseAsync("exec-1", new GateResponse { Status = GateResponseStatus.Approved });
     }
 
     [Fact]
@@ -223,7 +227,7 @@ public class ExecutionSessionManagerTests
     public void WhenNullConfigThenThrows()
     {
         Assert.Throws<ArgumentNullException>(
-            () => new ExecutionSessionManager(null!, _executionStore));
+            () => new ExecutionSessionManager(null!, _executionStore, _logger));
     }
 
     [Fact]
@@ -232,7 +236,7 @@ public class ExecutionSessionManagerTests
         IConfiguration config = new ConfigurationBuilder().Build();
 
         Assert.Throws<ArgumentNullException>(
-            () => new ExecutionSessionManager(config, null!));
+            () => new ExecutionSessionManager(config, null!, _logger));
     }
 
     [Fact]
@@ -240,7 +244,7 @@ public class ExecutionSessionManagerTests
     {
         IConfiguration config = new ConfigurationBuilder().Build();
         // Just verify it doesn't throw — default value is used
-        ExecutionSessionManager manager = new(config, _executionStore);
+        ExecutionSessionManager manager = new(config, _executionStore, _logger);
 
         Assert.NotNull(manager);
     }

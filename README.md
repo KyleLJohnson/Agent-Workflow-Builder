@@ -4,6 +4,23 @@ A visual, low-code platform for designing and executing multi-agent AI workflows
 
 ---
 
+## Demo
+
+A full end-to-end demo showing a **Developer → Approval Gate → Code Reviewer** workflow:
+
+1. Create a new workflow and drag-and-drop agents and a gate onto the canvas
+2. Connect the nodes into a pipeline
+3. Send a prompt ("Write C# code to add two numbers")
+4. Watch the Developer agent generate code
+5. Approve the gate
+6. Watch the Code Reviewer agent review the output
+
+https://github.com/user-attachments/assets/demo-gate-workflow.webm
+
+> The video is available locally at [`docs/demo-gate-workflow.webm`](docs/demo-gate-workflow.webm).
+
+---
+
 ## Problem → Solution
 
 ### The Problem
@@ -29,6 +46,12 @@ Agent Workflow Builder provides a **visual canvas** for composing AI agents into
 | **Execution persistence** | Every run is checkpointed. Paused executions survive restarts and can be resumed. |
 | **Concurrent execution** | Run multiple workflows simultaneously with per-user concurrency limits. |
 | **Planner agents** | A special agent type that generates a `<<<PLAN>>>` and dynamically creates sub-steps. |
+| **Workflow list view** | A landing page for browsing, creating, and managing saved workflows. |
+| **Auto-approve gates** | Toggle automatic gate approval for testing and development scenarios. |
+| **Custom agents** | Create your own agents with custom system prompts, input/output schemas, and categories. |
+| **Infrastructure as Code** | Full Bicep templates for one-command Azure deployment with optional private networking. |
+| **Execution recovery** | Interrupted executions are automatically recovered on server restart. |
+| **Distributed scale-out** | Azure SignalR Service + Service Bus queues for multi-instance deployments. |
 
 ---
 
@@ -48,6 +71,7 @@ Agent Workflow Builder provides a **visual canvas** for composing AI agents into
 | [Azure Blob Storage](https://learn.microsoft.com/azure/storage/blobs/) | Ingest plan files from blob containers |
 | [Microsoft Entra ID](https://learn.microsoft.com/entra/identity/) | Multi-user authentication & authorization |
 | [Playwright](https://playwright.dev/) | Running E2E tests |
+| [Azure CLI](https://learn.microsoft.com/cli/azure/) | Deploying infrastructure via Bicep |
 
 ---
 
@@ -243,19 +267,22 @@ When enabled, a background service polls the configured container for plan files
 │  │  JsonExecutionStore ─or── CosmosExecutionStore    │   │
 │  │  JsonAgentRegistry                                │   │
 │  │  McpClientManager (mcp.json)                      │   │
+│  │  CosmosSessionStore (change feed signaling)       │   │
+│  │  CosmosConcurrencyCounter (distributed limits)    │   │
+│  │  ServiceBusExecutionQueue (distributed queuing)   │   │
 │  └───────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────┘
                              │
                     External Services
                              │
-     ┌───────────────────────┼───────────────────────┐
-     │              │                │                │
-┌────▼────────┐ ┌───▼──────────┐ ┌───▼──────┐ ┌──────▼──────┐
-│ Azure       │ │ Your LLM     │ │ MCP      │ │ Azure       │
-│ OpenAI      │ │ (BYOK)       │ │ Servers  │ │ Cosmos DB   │
-│ gpt-4.1-*   │ │ Any OpenAI-  │ │ (stdio/  │ │ Blob Storage│
-│             │ │ compatible   │ │  SSE)    │ │             │
-└─────────────┘ └──────────────┘ └──────────┘ └─────────────┘
+   ┌────────┬────────┬────────┼────────┬────────┬────────┐
+   │        │        │        │        │        │        │
+┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐
+│Azure │ │ Your │ │ MCP  │ │Azure │ │Azure │ │Azure │ │ App  │
+│OpenAI│ │ LLM  │ │Server│ │Cosmos│ │Signal│ │Svc   │ │Insig-│
+│      │ │(BYOK)│ │(stdio│ │  DB  │ │  R   │ │ Bus  │ │ hts  │
+│      │ │      │ │/SSE) │ │      │ │      │ │      │ │      │
+└──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘
 ```
 
 ### Project Structure
@@ -265,22 +292,26 @@ When enabled, a background service polls the configured container for plan files
 | **AgentWorkflowBuilder.Core** | Domain models, interfaces, workflow engine, session management. Zero infrastructure dependencies. |
 | **AgentWorkflowBuilder.Persistence** | Storage implementations — JSON file stores (default) and Azure Cosmos DB stores (optional). |
 | **AgentWorkflowBuilder.Agents** | Built-in agent definitions and seeding logic. |
-| **AgentWorkflowBuilder.Api** | ASP.NET Core host — minimal API endpoints, SignalR hub, background services, DI composition root. |
-| **client/** | React 19 SPA — visual workflow editor, agent management, real-time execution panel. |
-| **data/** | Local data directory — agent definitions, workflow JSON files, MCP server config. |
-| **e2e/** | Playwright E2E test scaffold. |
+| **AgentWorkflowBuilder.Api** | ASP.NET Core host — minimal API endpoints, SignalR hub, background services (execution worker, recovery, blob polling), DI composition root. |
+| **client/** | React 19 SPA — workflow list view, visual canvas editor, agent management, real-time execution panel. |
+| **data/** | Local data directory — built-in/custom agent definitions, workflow JSON files, MCP server config. |
+| **e2e/** | Playwright E2E tests — agent CRUD, workflow design, gate workflows, execution panel, MCP settings. |
+| **infra/** | Bicep IaC templates — modular Azure deployment (App Service, Cosmos DB, SignalR, Service Bus, OpenAI, networking). |
+| **test/** | Unit test projects for Core and Persistence layers. |
 
 ### Built-in Agents
 
-| Agent | Purpose |
-|---|---|
-| Summarizer | Condenses text into key points |
-| Content Writer | Generates written content from prompts |
-| Code Reviewer | Reviews code for issues and improvements |
-| Sentiment Analyzer | Analyzes text sentiment |
-| Data Extractor | Extracts structured data from unstructured text |
-| Translator | Translates text between languages |
-| Planner | Generates multi-step execution plans (`<<<PLAN>>>` format) |
+| Agent | Category | Purpose |
+|---|---|---|
+| Summarizer | Summarization | Condenses text into key points |
+| Content Writer | Writing | Generates written content from prompts |
+| Code Reviewer | Development | Reviews code for issues and improvements |
+| Sentiment Analyzer | Analysis | Analyzes text sentiment |
+| Data Extractor | Extraction | Extracts structured data from unstructured text |
+| Translator | Translation | Translates text between languages |
+| Planner | Planning | Generates multi-step execution plans (`<<<PLAN>>>` format) |
+
+Additional agents can be created through the UI (e.g., a **Developer** agent for writing application code). Custom agents are stored in `data/agents/custom/`.
 
 ### Key Configuration
 
@@ -290,7 +321,42 @@ When enabled, a background service polls the configured container for plan files
 | `Workflow:ClarificationTimeoutMinutes` | `10` | How long to wait for user clarification |
 | `Workflow:MaxLoopIterations` | `3` | Max iterations for feedback loops |
 | `Workflow:MaxConcurrentExecutionsPerUser` | `5` | Per-user concurrency limit |
+| `Workflow:SignalingPollingIntervalMs` | `2000` | Polling interval for gate/clarification signaling |
 | `Data:BasePath` | `../../../data` | Path to local data directory |
+| `ServiceBus:ConnectionString` | — | Azure Service Bus connection (enables distributed execution queue) |
+| `ServiceBus:ExecutionQueueName` | `workflow-executions` | Queue name for execution requests |
+| `ServiceBus:CancellationQueueName` | `execution-cancellations` | Queue name for cancellation requests |
+| `Azure:SignalR:ConnectionString` | — | Azure SignalR Service connection (enables multi-instance scale-out) |
+| `CosmosDb:DedicatedGatewayEndpoint` | — | Cosmos DB dedicated gateway for integrated caching |
+
+---
+
+## E2E Tests
+
+End-to-end tests are in `e2e/` using [Playwright](https://playwright.dev/) with Chromium and Firefox.
+
+```bash
+# Install browsers (one-time)
+cd e2e
+npm install
+npx playwright install
+
+# Run all tests (requires app running on localhost:5173)
+npx playwright test
+
+# Run a specific test
+npx playwright test demo-gate-workflow --project=chromium
+```
+
+| Test | Coverage |
+|---|---|
+| `agent-crud.spec.ts` | Agent create, read, update, delete |
+| `workflow-design.spec.ts` | Workflow canvas — new, rename, drag-drop nodes |
+| `gate-workflow.spec.ts` | Gate node approval/rejection mechanics |
+| `workflow-flow.spec.ts` | End-to-end workflow execution flow |
+| `execution-panel.spec.ts` | Execution panel interactions |
+| `mcp-settings.spec.ts` | MCP server configuration UI |
+| `demo-gate-workflow.spec.ts` | Full demo: Developer → Gate → Code Reviewer with DnD and output scrolling |
 
 ---
 
@@ -300,16 +366,41 @@ When enabled, a background service polls the configured container for plan files
 
 No Azure services required. The app runs entirely locally using JSON file storage and a direct Azure OpenAI API key.
 
-### Azure Deployment
+### Azure Deployment (Bicep IaC)
 
-For a production deployment on Azure:
+The `infra/` directory contains Bicep templates for a full Azure deployment. A single `az deployment` command provisions all resources:
 
-1. **Azure OpenAI** — Deploy a model (e.g., `gpt-4.1-mini`) and note the endpoint + key.
-2. **Azure App Service** or **Azure Container Apps** — Host the .NET backend. Set environment variables for all config values.
-3. **Azure Static Web Apps** or **App Service** — Host the built React frontend (`npm run build` → `client/dist/`).
-4. **Azure Cosmos DB** (optional) — Create a database and containers (`workflows`, `executions`). Set the connection string.
-5. **Azure Blob Storage** (optional) — Create a storage account for plan ingestion.
-6. **Microsoft Entra ID** (optional) — Register an app for authentication. Configure `AzureAd` and `authConfig.ts`.
+```bash
+az deployment sub create \
+  --location <region> \
+  --template-file infra/main.bicep \
+  --parameters infra/main.bicepparam
+```
+
+#### Provisioned Resources
+
+| Resource | Module | Purpose |
+|---|---|---|
+| **App Service** | `modules/app-service.bicep` | .NET backend host with system-assigned managed identity |
+| **Azure OpenAI** | `modules/openai.bicep` | LLM endpoint (conditionally deployed) |
+| **Cosmos DB** | `modules/cosmos-db.bicep` | Workflow, execution, and session persistence |
+| **Azure SignalR** | `modules/signalr.bicep` | Real-time SignalR scale-out for multi-instance |
+| **Service Bus** | `modules/service-bus.bicep` | Execution and cancellation queues |
+| **Storage Account** | `modules/storage.bicep` | Blob plan ingestion |
+| **Application Insights** | `modules/app-insights.bicep` | Monitoring and diagnostics |
+| **VNet + Private Endpoints** | `modules/networking.bicep` | Optional private networking |
+
+#### Key Deployment Parameters
+
+| Parameter | Description |
+|---|---|
+| `enablePrivateNetworking` | Enable VNet integration and private endpoints for all services |
+| `cosmosEnableDedicatedGateway` | Enable Cosmos DB dedicated gateway for integrated caching |
+| `openAiModelName` / `openAiModelVersion` | Model to deploy in Azure OpenAI |
+
+#### Managed Identity
+
+When deployed to Azure, the App Service uses a **system-assigned managed identity** to authenticate with Cosmos DB, eliminating connection string secrets. The backend detects `CosmosDb:Endpoint` and uses `DefaultAzureCredential()` automatically.
 
 #### Environment Variables (production)
 

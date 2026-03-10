@@ -47,7 +47,7 @@ public class CosmosExecutionStore : IExecutionStore
         Container container = await GetContainerAsync(ct);
 
         // Cross-partition query since we don't know the workflowId
-        QueryDefinition query = new QueryDefinition("SELECT * FROM c WHERE c.id = @id")
+        QueryDefinition query = new QueryDefinition(CosmosQueries.ExecutionById)
             .WithParameter("@id", executionId);
 
         using FeedIterator<ExecutionRecord> iterator = container.GetItemQueryIterator<ExecutionRecord>(query);
@@ -67,7 +67,7 @@ public class CosmosExecutionStore : IExecutionStore
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowId);
         Container container = await GetContainerAsync(ct);
 
-        QueryDefinition query = new QueryDefinition("SELECT * FROM c WHERE c.workflowId = @wfId ORDER BY c.startedAt DESC")
+        QueryDefinition query = new QueryDefinition(CosmosQueries.ExecutionsByWorkflow)
             .WithParameter("@wfId", workflowId);
 
         List<ExecutionRecord> records = [];
@@ -87,7 +87,7 @@ public class CosmosExecutionStore : IExecutionStore
     {
         Container container = await GetContainerAsync(ct);
 
-        QueryDefinition query = new("SELECT * FROM c WHERE c.status = 'Paused'");
+        QueryDefinition query = new(CosmosQueries.PausedExecutions);
 
         List<ExecutionRecord> paused = [];
         using FeedIterator<ExecutionRecord> iterator = container.GetItemQueryIterator<ExecutionRecord>(query);

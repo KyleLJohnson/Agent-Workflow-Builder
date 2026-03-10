@@ -1,0 +1,26 @@
+{
+    "properties":  {
+                       "customSubDomainName":  "aoai-poc-klj",
+                       "disableLocalAuth":  false,
+                       "publicNetworkAccess":  "Enabled",
+                       "networkAcls":  {
+                                           "bypass":  null,
+                                           "defaultAction":  "Allow",
+                                           "ipRules":  [
+
+                                                       ],
+                                           "virtualNetworkRules":  [
+
+                                                                   ]
+                                       }
+                   },
+    "location":  "eastus",
+    "sku":  {
+                "capacity":  null,
+                "family":  null,
+                "name":  "S0",
+                "size":  null,
+                "tier":  null
+            },
+    "kind":  "OpenAI"
+}

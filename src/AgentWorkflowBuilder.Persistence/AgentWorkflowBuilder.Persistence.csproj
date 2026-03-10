@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.18.4" />
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.51.0" />
     <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

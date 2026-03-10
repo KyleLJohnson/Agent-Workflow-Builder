@@ -131,7 +131,7 @@ export default function ExecutionPanel({
 }: ExecutionPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
-  const [collapsedAgents, setCollapsedAgents] = useState<Set<string>>(new Set());
+  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({});
   const [submittedClarifications, setSubmittedClarifications] = useState<Set<string>>(new Set());
   const [gateEditText, setGateEditText] = useState<Record<string, string>>({});
@@ -171,7 +171,7 @@ export default function ExecutionPanel({
   }, [outputEvents]);
 
   const toggleAgentCollapsed = (agentName: string) => {
-    setCollapsedAgents((prev) => {
+    setExpandedAgents((prev) => {
       const next = new Set(prev);
       if (next.has(agentName)) next.delete(agentName);
       else next.add(agentName);
@@ -520,7 +520,7 @@ export default function ExecutionPanel({
 
                     {/* Grouped agent outputs */}
                     {groupedOutputs.map((group) => {
-                    const isOpen = !collapsedAgents.has(group.agentName);
+                    const isOpen = expandedAgents.has(group.agentName);
                     return (
                       <div
                         key={group.agentName}

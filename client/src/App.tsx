@@ -83,10 +83,10 @@ function AppContent() {
     const selectedEvents = execs.selectedExecution?.events ?? [];
     for (const evt of selectedEvents) {
       const key = evt.nodeId ?? evt.agentName;
-      if (evt.type === "AgentStepStarted" && key) {
+      if ((evt.type === "AgentStepStarted" || evt.type === "GateAwaitingApproval") && key) {
         running.add(key);
       }
-      if (evt.type === "AgentStepCompleted" && key) {
+      if ((evt.type === "AgentStepCompleted" || evt.type === "GateApproved" || evt.type === "GateRejected" || evt.type === "GateAutoApproved") && key) {
         running.delete(key);
       }
       if (evt.type === "ExecutionCompleted" || evt.type === "Error") {
@@ -186,6 +186,7 @@ function AppContent() {
             workflows={wfCtx.savedWorkflows}
             onSelect={wfCtx.handleLoadWorkflow}
             onCreateNew={wfCtx.handleNewWorkflow}
+            onDelete={wfCtx.deleteWorkflowById}
           />
         )}
       </div>

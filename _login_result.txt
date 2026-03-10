@@ -1,0 +1,12 @@
+To authenticate, visit https://github.com/login/device and enter code D6C1-2C8C.
+Waiting for authorization...
+copilot.exe : Login failed: Error: Device code expired before authorization 
+completed
+At line:1 char:11
++ $result = & $cliPath login 2>&1 | Out-String
++           ~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Login failed: E...ation completed 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+

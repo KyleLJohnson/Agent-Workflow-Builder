@@ -21,8 +21,9 @@ export default memo(function GateNode({ data, selected }: NodeProps) {
       className={`
         relative flex flex-col items-center gap-1 px-3 py-2 rounded-lg
         border-2 shadow-lg transition-all min-w-[120px]
-        ${selected ? "border-blue-400 ring-2 ring-blue-400/30" : "border-amber-600/50"}
-        ${isExecuting ? "animate-pulse ring-2 ring-amber-400/40" : ""}
+        ${isExecuting
+          ? "border-green-500 ring-2 ring-green-400/40 animate-pulse-border"
+          : selected ? "border-blue-400 ring-2 ring-blue-400/30" : "border-amber-600/50"}
         bg-slate-800/90 backdrop-blur
       `}
     >

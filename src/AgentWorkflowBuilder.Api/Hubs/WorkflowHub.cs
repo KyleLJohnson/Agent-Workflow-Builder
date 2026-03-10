@@ -6,16 +6,24 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace AgentWorkflowBuilder.Api.Hubs;
 
+/// <summary>
+/// SignalR hub for workflow execution.
+/// When Service Bus is configured, enqueues execution requests for background processing.
+/// Otherwise, falls back to in-process execution (local development).
+/// </summary>
 public class WorkflowHub : Hub
 {
     private readonly IWorkflowEngine _engine;
     private readonly IWorkflowStore _workflowStore;
     private readonly ExecutionSessionManager _sessionManager;
+    private readonly IExecutionQueue? _executionQueue;
+    private readonly IConcurrencyCounter _concurrencyCounter;
     private readonly ILogger<WorkflowHub> _logger;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<WorkflowHub> _hubContext;
     private readonly int _maxConcurrentPerUser;
 
+    // In-process execution tracking (used when Service Bus is not configured)
     private static readonly ConcurrentDictionary<string, CancellationTokenSource> ActiveExecutions = new();
     private static readonly ConcurrentDictionary<string, int> UserExecutionCounts = new();
 
@@ -23,18 +31,23 @@ public class WorkflowHub : Hub
         IWorkflowEngine engine,
         IWorkflowStore workflowStore,
         ExecutionSessionManager sessionManager,
+        IConcurrencyCounter concurrencyCounter,
         ILogger<WorkflowHub> logger,
         IConfiguration configuration,
-        IHubContext<WorkflowHub> hubContext)
+        IHubContext<WorkflowHub> hubContext,
+        IExecutionQueue? executionQueue = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(workflowStore);
         ArgumentNullException.ThrowIfNull(sessionManager);
+        ArgumentNullException.ThrowIfNull(concurrencyCounter);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(hubContext);
         _engine = engine;
         _workflowStore = workflowStore;
         _sessionManager = sessionManager;
+        _executionQueue = executionQueue;
+        _concurrencyCounter = concurrencyCounter;
         _logger = logger;
         _configuration = configuration;
         _hubContext = hubContext;
@@ -43,15 +56,17 @@ public class WorkflowHub : Hub
     }
 
     /// <summary>
-    /// Executes a workflow by streaming agent step events back to the caller.
-    /// Returns the executionId for tracking.
+    /// Executes a workflow. When Service Bus is configured, enqueues to the execution queue.
+    /// Otherwise, runs in-process for local development.
     /// </summary>
     [HubMethodName("ExecuteWorkflow")]
     public async Task<string> ExecuteWorkflowAsync(string workflowId, string inputMessage, bool? autoApproveGates = null)
     {
         string userId = GetUserId();
-        int currentCount = UserExecutionCounts.GetOrAdd(userId, 0);
-        if (currentCount >= _maxConcurrentPerUser)
+
+        // Check concurrency limit
+        bool canExecute = await _concurrencyCounter.TryIncrementAsync(userId, _maxConcurrentPerUser);
+        if (!canExecute)
         {
             await Clients.Caller.SendAsync("Error",
                 $"Maximum concurrent executions ({_maxConcurrentPerUser}) reached. Please wait for a running execution to complete.",
@@ -59,37 +74,134 @@ public class WorkflowHub : Hub
             return string.Empty;
         }
 
-        UserExecutionCounts.AddOrUpdate(userId, 1, (_, c) => c + 1);
-
         string executionId = Guid.NewGuid().ToString();
+
+        WorkflowDefinition? workflow = await _workflowStore.GetAsync(workflowId);
+        if (workflow is null)
+        {
+            await Clients.Caller.SendAsync("Error", "Workflow not found.", CancellationToken.None);
+            await _concurrencyCounter.DecrementAsync(userId);
+            return string.Empty;
+        }
+
+        bool resolvedAutoApprove = autoApproveGates ?? workflow.AutoApproveGates;
+
+        if (_executionQueue is not null)
+        {
+            // Distributed mode: enqueue to Service Bus for background worker processing
+            ExecutionMessage message = new()
+            {
+                ExecutionId = executionId,
+                WorkflowId = workflowId,
+                UserId = userId,
+                ConnectionId = Context.ConnectionId,
+                InputMessage = inputMessage,
+                AutoApproveGates = resolvedAutoApprove
+            };
+
+            await _executionQueue.EnqueueAsync(message);
+            _logger.LogInformation("Enqueued execution {ExecutionId} for workflow {WorkflowId}", executionId, workflowId);
+            return executionId;
+        }
+
+        // Local mode: in-process execution (same as before)
+        return await ExecuteInProcessAsync(executionId, workflow, inputMessage, resolvedAutoApprove, userId);
+    }
+
+    /// <summary>
+    /// Submits a clarification answer for a paused execution.
+    /// </summary>
+    [HubMethodName("AnswerClarification")]
+    public async Task AnswerClarificationAsync(string executionId, string answer)
+    {
+        await _sessionManager.SubmitClarificationAsync(executionId, answer);
+    }
+
+    /// <summary>
+    /// Approves a gate, optionally with edited output.
+    /// </summary>
+    [HubMethodName("ApproveGate")]
+    public async Task ApproveGateAsync(string executionId, string? editedOutput)
+    {
+        await _sessionManager.SubmitGateResponseAsync(executionId, new GateResponse
+        {
+            Status = GateResponseStatus.Approved,
+            EditedOutput = editedOutput
+        });
+    }
+
+    /// <summary>
+    /// Rejects a gate, aborting the workflow.
+    /// </summary>
+    [HubMethodName("RejectGate")]
+    public async Task RejectGateAsync(string executionId, string? reason)
+    {
+        await _sessionManager.SubmitGateResponseAsync(executionId, new GateResponse
+        {
+            Status = GateResponseStatus.Rejected,
+            Reason = reason
+        });
+    }
+
+    /// <summary>
+    /// Sends output back to a previous node for revision.
+    /// </summary>
+    [HubMethodName("SendBackGate")]
+    public async Task SendBackGateAsync(string executionId, string? feedback)
+    {
+        await _sessionManager.SubmitGateResponseAsync(executionId, new GateResponse
+        {
+            Status = GateResponseStatus.SendBack,
+            Feedback = feedback
+        });
+    }
+
+    /// <summary>
+    /// Cancels a running execution.
+    /// In distributed mode, sends a cancellation message via Service Bus.
+    /// In local mode, cancels the in-process CancellationTokenSource.
+    /// </summary>
+    [HubMethodName("CancelExecution")]
+    public async Task CancelExecutionAsync(string executionId)
+    {
+        if (_executionQueue is not null)
+        {
+            await _executionQueue.EnqueueCancellationAsync(executionId);
+            return;
+        }
+
+        // Local mode: cancel in-process
+        if (ActiveExecutions.TryGetValue(executionId, out CancellationTokenSource? cts))
+        {
+            cts.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// Runs a workflow in-process (local development fallback when Service Bus is not configured).
+    /// </summary>
+    private async Task<string> ExecuteInProcessAsync(
+        string executionId,
+        WorkflowDefinition workflow,
+        string inputMessage,
+        bool autoApproveGates,
+        string userId)
+    {
         CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(Context.ConnectionAborted);
         ActiveExecutions[executionId] = cts;
         CancellationToken ct = cts.Token;
 
-        WorkflowDefinition? workflow = await _workflowStore.GetAsync(workflowId, ct);
-        if (workflow is null)
-        {
-            await Clients.Caller.SendAsync("Error", "Workflow not found.", ct);
-            DecrementUserCount(userId);
-            ActiveExecutions.TryRemove(executionId, out _);
-            return string.Empty;
-        }
-
-        // Capture connection ID and use IHubContext for the background task,
-        // because the Hub instance is disposed after this method returns.
         string connectionId = Context.ConnectionId;
         IClientProxy caller = _hubContext.Clients.Client(connectionId);
 
-        // Fire and forget the execution, sending events as they arrive
         _ = Task.Run(async () =>
         {
             try
             {
-                await caller.SendAsync("ExecutionStarted", workflowId, ct);
+                await caller.SendAsync("ExecutionStarted", workflow.Id, ct);
 
-                bool resolvedAutoApprove = autoApproveGates ?? workflow.AutoApproveGates;
                 bool hasOutput = false;
-                await foreach (WorkflowExecutionEvent evt in _engine.ExecuteStreamingAsync(workflow, inputMessage, resolvedAutoApprove, ct))
+                await foreach (WorkflowExecutionEvent evt in _engine.ExecuteStreamingAsync(workflow, inputMessage, autoApproveGates, executionId, ct))
                 {
                     switch (evt.EventType)
                     {
@@ -146,7 +258,7 @@ public class WorkflowHub : Hub
                     string model = _configuration["CopilotSdk:DefaultModel"] ?? "(not set)";
                     _logger.LogWarning(
                         "Workflow {WorkflowId} completed but produced no output. CopilotSdk Provider={Provider}, BaseUrl={BaseUrl}, Model={Model}",
-                        workflowId, provider, baseUrl, model);
+                        workflow.Id, provider, baseUrl, model);
                     await caller.SendAsync("WorkflowOutput", new WorkflowExecutionEvent
                     {
                         EventType = ExecutionEventType.WorkflowOutput,
@@ -157,7 +269,7 @@ public class WorkflowHub : Hub
                     }, CancellationToken.None);
                 }
 
-                await caller.SendAsync("ExecutionCompleted", workflowId, CancellationToken.None);
+                await caller.SendAsync("ExecutionCompleted", workflow.Id, CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
@@ -165,7 +277,7 @@ public class WorkflowHub : Hub
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Workflow execution failed for {WorkflowId}", workflowId);
+                _logger.LogError(ex, "Workflow execution failed for {WorkflowId}", workflow.Id);
                 await caller.SendAsync("Error", ex.Message, CancellationToken.None);
             }
             finally
@@ -173,70 +285,11 @@ public class WorkflowHub : Hub
                 DecrementUserCount(userId);
                 ActiveExecutions.TryRemove(executionId, out CancellationTokenSource? removedCts);
                 removedCts?.Dispose();
+                await _concurrencyCounter.DecrementAsync(userId);
             }
         }, CancellationToken.None);
 
         return executionId;
-    }
-
-    /// <summary>
-    /// Submits a clarification answer for a paused execution.
-    /// </summary>
-    [HubMethodName("AnswerClarification")]
-    public void AnswerClarification(string executionId, string answer)
-    {
-        _sessionManager.SubmitClarification(executionId, answer);
-    }
-
-    /// <summary>
-    /// Approves a gate, optionally with edited output.
-    /// </summary>
-    [HubMethodName("ApproveGate")]
-    public void ApproveGate(string executionId, string? editedOutput)
-    {
-        _sessionManager.SubmitGateResponse(executionId, new GateResponse
-        {
-            Status = GateResponseStatus.Approved,
-            EditedOutput = editedOutput
-        });
-    }
-
-    /// <summary>
-    /// Rejects a gate, aborting the workflow.
-    /// </summary>
-    [HubMethodName("RejectGate")]
-    public void RejectGate(string executionId, string? reason)
-    {
-        _sessionManager.SubmitGateResponse(executionId, new GateResponse
-        {
-            Status = GateResponseStatus.Rejected,
-            Reason = reason
-        });
-    }
-
-    /// <summary>
-    /// Sends output back to a previous node for revision.
-    /// </summary>
-    [HubMethodName("SendBackGate")]
-    public void SendBackGate(string executionId, string? feedback)
-    {
-        _sessionManager.SubmitGateResponse(executionId, new GateResponse
-        {
-            Status = GateResponseStatus.SendBack,
-            Feedback = feedback
-        });
-    }
-
-    /// <summary>
-    /// Cancels a running execution.
-    /// </summary>
-    [HubMethodName("CancelExecution")]
-    public void CancelExecution(string executionId)
-    {
-        if (ActiveExecutions.TryGetValue(executionId, out CancellationTokenSource? cts))
-        {
-            cts.Cancel();
-        }
     }
 
     /// <summary>
@@ -250,7 +303,6 @@ public class WorkflowHub : Hub
         }
         catch (UnauthorizedAccessException)
         {
-            // Auth not configured — fall back to connection ID for local dev
             return Context.ConnectionId;
         }
     }
