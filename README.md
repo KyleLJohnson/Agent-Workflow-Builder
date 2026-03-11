@@ -15,9 +15,9 @@ A full end-to-end demo showing a **Developer → Approval Gate → Code Reviewer
 5. Approve the gate
 6. Watch the Code Reviewer agent review the output
 
-https://github.com/KyleLJohnson/Agent-Workflow-Builder/raw/main/docs/demo-gate-workflow.webm
-
-> If the video doesn't render above, download or view it directly: [`docs/demo-gate-workflow.webm`](docs/demo-gate-workflow.webm).
+<video src="https://github.com/KyleLJohnson/Agent-Workflow-Builder/raw/main/docs/demo-gate-workflow.webm" controls width="100%">
+  Your browser does not support the video tag. <a href="docs/demo-gate-workflow.webm">Download the demo video</a>.
+</video>
 
 ---
 
